@@ -1,0 +1,24 @@
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+coverage/
+
+# Nunca se commitea el build: lo hace GitHub Actions.
+# Esta linea existe porque el ERP de Servimil si lo hace y ahi duele.
+apps/api/dist/
+apps/api/prisma/runtime-client/
+
+.env
+.env.*
+!.env.example
+
+# Credenciales de sesion de WhatsApp: van cifradas en Postgres, nunca en disco.
+auth_info*/
+*.pem
+*.key
+
+*.log
+.DS_Store
+Thumbs.db

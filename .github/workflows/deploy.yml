@@ -1,0 +1,88 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-produccion
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  imagenes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # El SHA se hornea en la imagen: es lo que /health devuelve y lo que
+      # permite comprobar que el despliegue entro sin abrir ningun panel.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          build-args: GIT_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/vision-os-${{ matrix.app }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/vision-os-${{ matrix.app }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  servidor:
+    needs: imagenes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Desplegar por SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/vision-os
+            git pull --ff-only
+            export TAG=${{ github.sha }}
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull api web
+            # migrate deploy va en el command del contenedor api
+            docker compose up -d
+            docker image prune -f
+
+  verificar:
+    needs: servidor
+    runs-on: ubuntu-latest
+    steps:
+      # El criterio de E0: el SHA que responde /health es el que se acaba de
+      # subir. "El panel dice completado" no cuenta como verificacion.
+      - name: /health devuelve el SHA de este commit
+        run: |
+          for intento in $(seq 1 20); do
+            sha=$(curl -sf "${{ secrets.PUBLIC_URL }}/api/health" | grep -o '"sha":"[^"]*"' | cut -d'"' -f4 || true)
+            if [ "$sha" = "${{ github.sha }}" ]; then
+              echo "Desplegado: $sha"
+              exit 0
+            fi
+            echo "intento $intento — responde '$sha', se espera '${{ github.sha }}'"
+            sleep 15
+          done
+          echo "::error::El despliegue no entro: /health sigue en otro commit."
+          exit 1

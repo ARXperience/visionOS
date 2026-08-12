@@ -1,0 +1,320 @@
+// VISION OS — Core Vision
+//
+// Convenciones (heredadas del ERP de Servimil, que ya funcionan):
+//   uuid_generate_v4() como id, @map en snake_case, @@map en plural.
+//
+// Regla que no se negocia: TODO lo temporal es @db.Timestamptz(3).
+// Prisma mapea DateTime a `timestamp` SIN zona por defecto, y el
+// EXCLUDE de la agenda usa tstzrange, que no compila sobre eso. El bug
+// no aparece hasta que alguien consulta con otro TZ, y entonces son
+// citas movidas cinco horas en produccion.
+//
+// E0 arranca con 5 modelos. El resto del Core Vision entra en E1.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm, unaccent, btree_gist, uuid_ossp(map: "uuid-ossp")]
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ENUMS
+// ═══════════════════════════════════════════════════════════════════
+
+enum BusinessLine {
+  CONSULTA
+  EXAMEN
+  CIRUGIA
+  OPTICA
+  EMPRESAS
+  ESTETICA
+}
+
+enum RoomKind {
+  CONSULTORIO
+  SALA_DIAGNOSTICO
+  QUIROFANO
+  SALA_PROCEDIMIENTOS
+  OPTICA
+}
+
+enum EquipmentModality {
+  OCT
+  ANGIOGRAFO
+  CAMPIMETRO
+  PENTACAM
+  ECOGRAFO
+  UBM
+  BIOMETRO
+  INTERFEROMETRO
+  PAQUIMETRO
+  MICROSCOPIO_ESPECULAR
+  PUPILOMETRO
+  ELECTROFISIOLOGIA
+  LAMPARA_HENDIDURA
+  AUTOREFRACTOMETRO
+  TOPOGRAFO
+  LASER
+  FACOEMULSIFICADOR
+  OTRO
+}
+
+enum UserRole {
+  SUPERADMIN
+  ADMIN_SEDE
+  COORDINACION
+  RECEPCION
+  AGENDAMIENTO
+  CALL_CENTER
+  PROFESIONAL
+  FACTURACION
+  AUDITOR
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+/// READ y EXPORT existen a proposito: la Ley 1581 obliga a poder responder
+/// "quien consulto la ficha de este paciente", no solo quien la modifico.
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  READ
+  EXPORT
+  LOGIN
+  LOGIN_FAILED
+  PRINT
+  SHARE
+  MERGE
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RED FISICA
+// ═══════════════════════════════════════════════════════════════════
+
+model Site {
+  id     String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code   String @unique
+  name   String
+  city   String
+  address String
+
+  /// DIVIPOLA. Gancho RIPS: nullable hoy, obligatorio antes de facturar.
+  municipalityCode String? @map("municipality_code") @db.VarChar(5)
+  /// Codigo de habilitacion REPS de la sede. Lo pedira RIPS.
+  habilitationCode String? @map("habilitation_code")
+
+  phone    String?
+  timezone String  @default("America/Bogota")
+  /// Horario de puertas, no de agenda: {"mon":[["07:00","18:00"]], ...}
+  openingHours Json @default("{}") @map("opening_hours")
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  rooms      Room[]
+  equipment  Equipment[]
+  userAccess UserSiteAccess[]
+
+  @@map("sites")
+}
+
+model Room {
+  id       String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  siteId   String   @map("site_id") @db.Uuid
+  code     String
+  name     String
+  kind     RoomKind @default(CONSULTORIO)
+  isActive Boolean  @default(true) @map("is_active")
+  metadata Json     @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, code])
+  @@index([siteId, kind, isActive])
+  @@map("rooms")
+}
+
+model Equipment {
+  id           String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  siteId       String            @map("site_id") @db.Uuid
+  code         String
+  name         String
+  modality     EquipmentModality
+  brand        String?
+  model        String?
+  serialNumber String?           @map("serial_number")
+  isActive     Boolean           @default(true) @map("is_active")
+
+  /// Gancho de metrologia (Res. 3100). Solo fechas, sin modulo de mantenimiento.
+  lastServiceAt DateTime? @map("last_service_at") @db.Date
+  nextServiceAt DateTime? @map("next_service_at") @db.Date
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  site Site @relation(fields: [siteId], references: [id])
+
+  @@unique([siteId, code])
+  @@index([siteId, modality, isActive])
+  @@map("equipment")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CATALOGO
+// ═══════════════════════════════════════════════════════════════════
+
+model Service {
+  id           String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code         String       @unique
+  /// CUPS. Gancho DIAN/RIPS.
+  cupsCode     String?      @map("cups_code")
+  name         String
+  /// Enlaza con la pagina del sitio publico (visioncolombia/tools/build.py).
+  slug         String       @unique
+  businessLine BusinessLine @map("business_line")
+
+  durationMin Int @map("duration_min")
+  /// Limpieza del recurso despues. Se suma a la reserva, no a la cita.
+  bufferMin   Int @default(0) @map("buffer_min")
+
+  requiresProfessional Boolean            @default(true) @map("requires_professional")
+  requiresRoom         Boolean            @default(true) @map("requires_room")
+  requiredRoomKind     RoomKind?          @map("required_room_kind")
+  requiredModality     EquipmentModality? @map("required_modality")
+
+  requiresReferral      Boolean @default(false) @map("requires_referral")
+  requiresAuthorization Boolean @default(false) @map("requires_authorization")
+  requiresFasting       Boolean @default(false) @map("requires_fasting")
+  /// Si dilata, el recordatorio avisa que no conduzca de regreso.
+  requiresDilation      Boolean @default(false) @map("requires_dilation")
+  requiresCompanion     Boolean @default(false) @map("requires_companion")
+  /// Texto que sale por WhatsApp con el recordatorio.
+  preparationNotes      String? @map("preparation_notes")
+
+  isBilateral         Boolean @default(true) @map("is_bilateral")
+  producesResultFile  Boolean @default(false) @map("produces_result_file")
+  isSchedulableOnline Boolean @default(true) @map("is_schedulable_online")
+  isActive            Boolean @default(true) @map("is_active")
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([businessLine, isActive])
+  @@map("services")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// USUARIOS Y AUDITORIA
+// ═══════════════════════════════════════════════════════════════════
+
+model User {
+  id           String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  firstName    String     @map("first_name")
+  lastName     String     @map("last_name")
+  phone        String?
+  role         UserRole   @default(RECEPCION)
+  status       UserStatus @default(INVITED)
+
+  /// Permisos finos adicionales al rol (<recurso>.<accion>). Vacio = solo el rol.
+  extraPermissions String[] @default([]) @map("extra_permissions")
+  /// Puede ver pacientes de cualquier sede (direccion medica, auditoria).
+  crossSitePatientRead Boolean @default(false) @map("cross_site_patient_read")
+
+  lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(3)
+  lastLoginIp String?   @map("last_login_ip")
+  mfaEnabled  Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret   String?   @map("mfa_secret")
+
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  siteAccess    UserSiteAccess[]
+  refreshTokens RefreshToken[]
+  auditLogs     AuditLog[]
+
+  @@index([role, status])
+  @@map("users")
+}
+
+/// A que sedes accede el usuario. Sin fila = no ve la agenda de esa sede.
+model UserSiteAccess {
+  userId    String   @map("user_id") @db.Uuid
+  siteId    String   @map("site_id") @db.Uuid
+  isPrimary Boolean  @default(false) @map("is_primary")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([userId, siteId])
+  @@map("user_site_access")
+}
+
+model RefreshToken {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  token      String   @unique
+  userId     String   @map("user_id") @db.Uuid
+  deviceInfo String?  @map("device_info")
+  ipAddress  String?  @map("ip_address")
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+  isRevoked  Boolean  @default(false) @map("is_revoked")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+/// Inmutable de verdad: la migracion le revoca UPDATE y DELETE al rol de la
+/// aplicacion. Sin updatedAt ni deletedAt, a proposito.
+model AuditLog {
+  id         String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId     String?     @map("user_id") @db.Uuid
+  action     AuditAction
+  entityType String      @map("entity_type")
+  entityId   String?     @map("entity_id") @db.Uuid
+
+  /// Desnormalizado a proposito: permite responder "quien consulto a este
+  /// paciente" en una consulta, que es lo que pide una auditoria.
+  /// Sin FK todavia: el modelo Person entra en E1.
+  personId String? @map("person_id") @db.Uuid
+  siteId   String? @map("site_id") @db.Uuid
+
+  /// En READ/EXPORT se guarda el filtro y el numero de registros devueltos.
+  oldValues Json?   @map("old_values")
+  newValues Json?   @map("new_values")
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+  requestId String? @map("request_id")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([personId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

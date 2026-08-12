@@ -1,0 +1,24 @@
+{
+  "name": "vision-os",
+  "private": true,
+  "version": "0.1.0",
+  "description": "VISION OS — sistema de gestion de la clinica oftalmologica Vision Colombia",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.6.2",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "migrate:dev": "npm run migrate:dev --workspace apps/api",
+    "seed": "npm run seed --workspace apps/api"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}

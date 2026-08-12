@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    # Base efimera: solo la usa prisma migrate diff como shadow para
+    # comprobar que las migraciones y el esquema describen lo mismo.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: shadow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --no-audit --no-fund
+
+      # R4 del plan: el ERP de Servimil versiona su esquema con parches
+      # sueltos y no se puede levantar desde cero. Aqui no se repite.
+      - name: El esquema no cambia sin migracion
+        if: github.event_name == 'pull_request'
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch origin "${{ github.base_ref }}" --depth=1
+          if git diff --name-only "$base"...HEAD | grep -q '^apps/api/prisma/schema.prisma$'; then
+            if ! git diff --name-only "$base"...HEAD | grep -q '^apps/api/prisma/migrations/'; then
+              echo "::error::schema.prisma cambio sin su migracion en prisma/migrations/."
+              exit 1
+            fi
+          fi
+
+      # El schema y las migraciones tienen que describir lo mismo. Si alguien
+      # edito el schema y escribio una migracion que no corresponde, esto lo
+      # detecta sin necesidad de base de datos.
+      - name: Migraciones al dia con el esquema
+        run: |
+          cd apps/api
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code && echo "sin deriva"
+        env:
+          SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shadow
+
+      - run: npm run build
+
+      # jest --passWithNoTests esta prohibido: es como el ERP acabo sin tests.
+      - name: No se admite --passWithNoTests
+        run: |
+          if grep -rn -- "--passWithNoTests" --include=package.json --include="jest.config*" . ; then
+            echo "::error::--passWithNoTests reintroducido. Escriba la prueba."
+            exit 1
+          fi
+
+      - run: npm test

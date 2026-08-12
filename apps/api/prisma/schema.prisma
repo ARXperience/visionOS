@@ -92,6 +92,7 @@ enum AuditAction {
   EXPORT
   LOGIN
   LOGIN_FAILED
+  LOGOUT
   PRINT
   SHARE
   MERGE

@@ -26,6 +26,72 @@ datasource db {
 // ENUMS
 // ═══════════════════════════════════════════════════════════════════
 
+/// Tipos de documento de la tabla de referencia de RIPS. No es una lista
+/// libre: si aqui falta uno, la factura electronica del futuro se rechaza.
+enum DocumentType {
+  CC
+  TI
+  CE
+  PA
+  RC
+  NIT
+  MS
+  AS
+  PE
+  PT
+  CN
+  SC
+  DE
+}
+
+/// RIPS admite I (indeterminado). No se reduce a M/F.
+enum Sex {
+  M
+  F
+  I
+}
+
+enum Zone {
+  U
+  R
+}
+
+enum PayerType {
+  EPS
+  PREPAGADA
+  POLIZA
+  ARL
+  SOAT
+  EMPRESA
+  PARTICULAR
+}
+
+enum Regime {
+  CONTRIBUTIVO
+  SUBSIDIADO
+  ESPECIAL
+  EXCEPCION
+  PARTICULAR
+}
+
+enum ProfessionalType {
+  OFTALMOLOGO
+  OPTOMETRA
+  ORTOPTISTA
+  ANESTESIOLOGO
+  ENFERMERIA
+  ESTETICA
+  OTRO
+}
+
+enum ConsentPurpose {
+  TRATAMIENTO_DATOS
+  COMUNICACIONES_COMERCIALES
+  HISTORIA_CLINICA
+  IMAGENES
+  TELECONSULTA
+}
+
 enum BusinessLine {
   CONSULTA
   EXAMEN
@@ -103,10 +169,10 @@ enum AuditAction {
 // ═══════════════════════════════════════════════════════════════════
 
 model Site {
-  id     String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  code   String @unique
-  name   String
-  city   String
+  id      String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code    String @unique
+  name    String
+  city    String
   address String
 
   /// DIVIPOLA. Gancho RIPS: nullable hoy, obligatorio antes de facturar.
@@ -114,18 +180,20 @@ model Site {
   /// Codigo de habilitacion REPS de la sede. Lo pedira RIPS.
   habilitationCode String? @map("habilitation_code")
 
-  phone    String?
-  timezone String  @default("America/Bogota")
+  phone        String?
+  timezone     String  @default("America/Bogota")
   /// Horario de puertas, no de agenda: {"mon":[["07:00","18:00"]], ...}
-  openingHours Json @default("{}") @map("opening_hours")
-  isActive Boolean @default(true) @map("is_active")
+  openingHours Json    @default("{}") @map("opening_hours")
+  isActive     Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  rooms      Room[]
-  equipment  Equipment[]
-  userAccess UserSiteAccess[]
+  rooms          Room[]
+  equipment      Equipment[]
+  userAccess     UserSiteAccess[]
+  professionals  ProfessionalSite[]
+  availabilities ProfessionalAvailability[]
 
   @@map("sites")
 }
@@ -216,6 +284,9 @@ model Service {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  prices        ServicePrice[]
+  professionals ServiceProfessional[]
+
   @@index([businessLine, isActive])
   @@map("services")
 }
@@ -235,9 +306,9 @@ model User {
   status       UserStatus @default(INVITED)
 
   /// Permisos finos adicionales al rol (<recurso>.<accion>). Vacio = solo el rol.
-  extraPermissions String[] @default([]) @map("extra_permissions")
+  extraPermissions     String[] @default([]) @map("extra_permissions")
   /// Puede ver pacientes de cualquier sede (direccion medica, auditoria).
-  crossSitePatientRead Boolean @default(false) @map("cross_site_patient_read")
+  crossSitePatientRead Boolean  @default(false) @map("cross_site_patient_read")
 
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(3)
   lastLoginIp String?   @map("last_login_ip")
@@ -252,6 +323,8 @@ model User {
   siteAccess    UserSiteAccess[]
   refreshTokens RefreshToken[]
   auditLogs     AuditLog[]
+  professional  Professional?
+  consents      DataConsent[]
 
   @@index([role, status])
   @@map("users")
@@ -318,4 +391,279 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// IDENTIDAD — global, NUNCA lleva siteId
+//
+// Vision Colombia es UNA IPS con tres sedes, no tres inquilinos. El
+// paciente se atiende en las tres y debe ser el mismo registro. Poner
+// siteId aqui "para filtrar mas rapido" es la decision que parece
+// inocente y termina en tres fichas y tres historias de la misma
+// persona. Lo que contiene el acceso no es un filtro: es que cada
+// lectura de ficha queda en audit_logs.
+// ═══════════════════════════════════════════════════════════════════
+
+/// Persona unica. Se crea en el PRIMER contacto —incluido un WhatsApp de
+/// alguien que solo pregunta—, mucho antes de ser paciente. `isPatient`
+/// es una bandera, no otra tabla: asi el timeline y las conversaciones
+/// nunca hay que re-parentarlos cuando la persona se convierte.
+model Person {
+  id String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+
+  // RIPS y DIAN exigen los cuatro componentes del nombre por separado.
+  // Partirlos despues, sobre miles de registros, es trabajo manual.
+  docType       DocumentType?
+  docNumber     String?       @map("doc_number")
+  firstName     String        @map("first_name")
+  secondName    String?       @map("second_name")
+  firstSurname  String?       @map("first_surname")
+  secondSurname String?       @map("second_surname")
+  /// Desnormalizado para la busqueda trigram. Lo mantiene la aplicacion.
+  displayName   String        @map("display_name")
+
+  birthDate DateTime? @map("birth_date") @db.Date
+  sex       Sex?
+  /// E.164 (+57...). La normalizacion decide si un WhatsApp entrante
+  /// engancha con una persona existente o crea un duplicado.
+  phone     String?
+  phoneAlt  String?   @map("phone_alt")
+  email     String?
+
+  // Geografia DIVIPOLA: obligatoria para RIPS y factura electronica.
+  countryCode      String  @default("170") @map("country_code") @db.VarChar(3)
+  departmentCode   String? @map("department_code") @db.VarChar(2)
+  municipalityCode String? @map("municipality_code") @db.VarChar(5)
+  zone             Zone?
+  addressLine      String? @map("address_line")
+
+  isPatient    Boolean   @default(false) @map("is_patient")
+  patientSince DateTime? @map("patient_since") @db.Timestamptz(3)
+  /// Numero de historia. Unico solo entre pacientes (indice parcial en SQL).
+  mrn          String?
+
+  occupation            String?
+  emergencyContactName  String? @map("emergency_contact_name")
+  emergencyContactPhone String? @map("emergency_contact_phone")
+  emergencyContactRel   String? @map("emergency_contact_rel")
+
+  /// Deduplicacion. Van a duplicar personas, garantizado: dos telefonos, un
+  /// apellido mal escrito. Fusionar apuntando —y no borrando— es lo que
+  /// permite que la ficha vieja siga resolviendo.
+  mergedIntoId String?  @map("merged_into_id") @db.Uuid
+  mergedInto   Person?  @relation("PersonMerge", fields: [mergedIntoId], references: [id])
+  mergedFrom   Person[] @relation("PersonMerge")
+
+  notes     String?
+  tags      String[]  @default([])
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  coverages Coverage[]
+  consents  DataConsent[]
+
+  @@unique([docType, docNumber])
+  @@index([displayName])
+  @@index([phone])
+  @@index([isPatient, createdAt])
+  @@index([mergedIntoId])
+  @@map("persons")
+}
+
+/// Asegurador o pagador. "Particular" tambien es un Payer, sembrado.
+model Payer {
+  id                    String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  type                  PayerType
+  /// Codigo de la entidad segun MinSalud.
+  code                  String    @unique
+  name                  String
+  nit                   String?
+  /// Digito de verificacion. Lo pide la DIAN y calcularlo despues es un lio.
+  dv                    String?   @db.VarChar(1)
+  isActive              Boolean   @default(true) @map("is_active")
+  requiresAuthorization Boolean   @default(false) @map("requires_authorization")
+  contactEmail          String?   @map("contact_email")
+  metadata              Json      @default("{}")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  coverages Coverage[]
+  prices    ServicePrice[]
+
+  @@index([type, isActive])
+  @@map("payers")
+}
+
+/// Afiliacion de una persona a un pagador. Puede tener varias a la vez
+/// (EPS + prepagada + poliza); `isPrimary` decide cual se ofrece al agendar.
+model Coverage {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId      String    @map("person_id") @db.Uuid
+  payerId       String    @map("payer_id") @db.Uuid
+  regime        Regime    @default(PARTICULAR)
+  planName      String?   @map("plan_name")
+  policyNumber  String?   @map("policy_number")
+  affiliateType String?   @map("affiliate_type")
+  isPrimary     Boolean   @default(false) @map("is_primary")
+  validFrom     DateTime? @map("valid_from") @db.Date
+  validTo       DateTime? @map("valid_to") @db.Date
+  verifiedAt    DateTime? @map("verified_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  payer  Payer  @relation(fields: [payerId], references: [id])
+
+  @@index([personId, isPrimary])
+  @@index([payerId])
+  @@map("coverages")
+}
+
+/// Ley 1581 y Decreto 1377. Append-only por trigger: revocar es escribir
+/// revokedAt, nunca borrar la fila. Se guarda el texto exacto de la version
+/// aceptada, porque un booleano no prueba nada ante la SIC.
+model DataConsent {
+  id            String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId      String         @map("person_id") @db.Uuid
+  purpose       ConsentPurpose
+  granted       Boolean
+  policyVersion String         @map("policy_version")
+  channel       String
+  evidenceUrl   String?        @map("evidence_url")
+  evidenceText  String?        @map("evidence_text")
+  ipAddress     String?        @map("ip_address")
+  capturedById  String?        @map("captured_by_id") @db.Uuid
+  grantedAt     DateTime       @default(now()) @map("granted_at") @db.Timestamptz(3)
+  revokedAt     DateTime?      @map("revoked_at") @db.Timestamptz(3)
+
+  person     Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  capturedBy User?  @relation(fields: [capturedById], references: [id])
+
+  @@index([personId, purpose, grantedAt])
+  @@map("data_consents")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PROFESIONALES
+// ═══════════════════════════════════════════════════════════════════
+
+/// Separado de User a proposito: hay profesionales que nunca entran al
+/// sistema, y usuarios (recepcion) que no atienden a nadie. Meterlos en una
+/// sola tabla es de los errores caros de deshacer.
+model Professional {
+  id            String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId        String?          @unique @map("user_id") @db.Uuid
+  docType       DocumentType     @default(CC) @map("doc_type")
+  docNumber     String           @map("doc_number")
+  firstName     String           @map("first_name")
+  lastName      String           @map("last_name")
+  displayName   String           @map("display_name")
+  type          ProfessionalType
+  /// Registro medico / ReTHUS. RIPS lo exige en cada atencion.
+  licenseNumber String?          @map("license_number")
+  specialties   String[]         @default([])
+  /// Color en el calendario de la agenda.
+  color         String?
+  isActive      Boolean          @default(true) @map("is_active")
+  metadata      Json             @default("{}")
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user           User?                      @relation(fields: [userId], references: [id])
+  sites          ProfessionalSite[]
+  availabilities ProfessionalAvailability[]
+  services       ServiceProfessional[]
+
+  @@unique([docType, docNumber])
+  @@index([isActive, type])
+  @@map("professionals")
+}
+
+model ProfessionalSite {
+  professionalId String @map("professional_id") @db.Uuid
+  siteId         String @map("site_id") @db.Uuid
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@id([professionalId, siteId])
+  @@map("professional_sites")
+}
+
+/// Disponibilidad recurrente semanal, en minutos desde medianoche LOCAL de
+/// la sede. Las ausencias NO van aqui: en E3 son ResourceBooking sin cita,
+/// que el mismo EXCLUDE ya protege sin codigo extra.
+model ProfessionalAvailability {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  professionalId String    @map("professional_id") @db.Uuid
+  siteId         String    @map("site_id") @db.Uuid
+  /// 0 = domingo ... 6 = sabado.
+  weekday        Int       @db.SmallInt
+  /// 480 = 08:00.
+  startMinute    Int       @map("start_minute")
+  endMinute      Int       @map("end_minute")
+  /// Vacio = atiende cualquier servicio que tenga habilitado.
+  serviceIds     String[]  @default([]) @map("service_ids") @db.Uuid
+  validFrom      DateTime? @map("valid_from") @db.Date
+  validTo        DateTime? @map("valid_to") @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  site         Site         @relation(fields: [siteId], references: [id])
+
+  @@index([professionalId, weekday])
+  @@index([siteId, weekday])
+  @@map("professional_availabilities")
+}
+
+/// Que profesional puede prestar que servicio. Sin fila, no puede.
+model ServiceProfessional {
+  serviceId      String @map("service_id") @db.Uuid
+  professionalId String @map("professional_id") @db.Uuid
+  /// La Dra. X hace catarata en 40 y no en 60. Sin este campo, la agenda
+  /// miente para todo el mundo salvo para el caso promedio.
+  durationMin    Int?   @map("duration_min")
+
+  service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, professionalId])
+  @@map("service_professionals")
+}
+
+/// Tarifa por asegurador. payerId null = tarifa base/particular;
+/// siteId null = tarifa de red, con fila = excepcion de esa sede.
+model ServicePrice {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  serviceId  String    @map("service_id") @db.Uuid
+  payerId    String?   @map("payer_id") @db.Uuid
+  siteId     String?   @map("site_id") @db.Uuid
+  price      Decimal   @db.Decimal(14, 2)
+  /// Copago o cuota moderadora que asume el paciente.
+  copay      Decimal?  @db.Decimal(14, 2)
+  currency   String    @default("COP") @db.VarChar(3)
+  /// Manual tarifario contratado: ISS2001, SOAT2024, PROPIA.
+  tariffBook String?   @map("tariff_book")
+  validFrom  DateTime  @map("valid_from") @db.Date
+  validTo    DateTime? @map("valid_to") @db.Date
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  payer   Payer?  @relation(fields: [payerId], references: [id])
+
+  @@index([serviceId, payerId, validFrom])
+  @@map("service_prices")
+}
+
+/// Festivos colombianos. Se siembran, no se recalculan en cada consulta de
+/// disponibilidad: la ley Emiliani mueve varios al lunes siguiente y esa
+/// regla no se reimplementa en tres sitios distintos.
+model Holiday {
+  date       DateTime @id @db.Date
+  name       String
+  isNational Boolean  @default(true) @map("is_national")
+
+  @@map("holidays")
 }

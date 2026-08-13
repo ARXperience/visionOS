@@ -1,4 +1,12 @@
 # TLS automatico por Let's Encrypt. Sin certificados que renovar a mano.
+#
+# Un solo origen para los tres: el sitio publico de la clinica, el sistema
+# administrativo y la API. Asi la sesion viaja en cookie httpOnly —que un
+# XSS no puede leer, a diferencia de localStorage— y no hay CORS que
+# configurar entre la web y la API.
+#
+# `scripts/dev-proxy.mjs` hace este mismo reparto en desarrollo. Si cambia
+# uno, cambia el otro.
 {$DOMAIN} {
 	encode gzip
 
@@ -6,8 +14,18 @@
 		reverse_proxy api:3001
 	}
 
-	handle {
+	# VISION OS. Next corre con basePath /admin, asi que la ruta llega
+	# entera y no hay que reescribirla.
+	handle /admin* {
 		reverse_proxy web:3000
+	}
+
+	# El sitio publico: HTML estatico generado por tools/build.py del
+	# repositorio visioncolombia. Se despliega copiando la carpeta.
+	handle {
+		root * /srv/sitio-publico
+		try_files {path} {path}/index.html {path}.html
+		file_server
 	}
 
 	log {

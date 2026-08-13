@@ -8,6 +8,7 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -25,6 +26,7 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuditModule,
     AuthModule,
+    CatalogModule,
   ],
   controllers: [HealthController],
   providers: [

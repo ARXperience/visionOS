@@ -1,46 +1,102 @@
-async function estadoApi() {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-  try {
-    const r = await fetch(`${base}/health`, { cache: 'no-store' });
-    if (!r.ok) return null;
-    return (await r.json()) as { status: string; sha: string; database: string };
-  } catch {
-    return null;
-  }
+'use client';
+
+import { useEffect, useState } from 'react';
+
+import { Marca } from '../components/marca';
+import { Panel } from '../components/panel';
+import { type Sesion, entrar, recuperar } from '../lib/api';
+
+export default function Admin() {
+  const [sesion, setSesion] = useState<Sesion | null>(null);
+  // `null` mientras se comprueba si hay sesión: sin este tercer estado, el
+  // login parpadea en cada recarga antes de que llegue el refresh.
+  const [comprobando, setComprobando] = useState(true);
+
+  useEffect(() => {
+    recuperar()
+      .then(setSesion)
+      .finally(() => setComprobando(false));
+  }, []);
+
+  if (comprobando) return <main className="acceso" aria-busy="true" />;
+  if (sesion) return <Panel sesion={sesion} alSalir={() => setSesion(null)} />;
+  return <Acceso alEntrar={setSesion} />;
 }
 
-export default async function Home() {
-  const salud = await estadoApi();
+function Acceso({ alEntrar }: { alEntrar: (s: Sesion) => void }) {
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function enviar(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setEnviando(true);
+    setError(null);
+
+    const datos = new FormData(e.currentTarget);
+    try {
+      alEntrar(
+        await entrar(String(datos.get('email') ?? ''), String(datos.get('password') ?? '')),
+      );
+    } catch (err) {
+      // Mensaje único: no se distingue "no existe" de "clave incorrecta",
+      // o el formulario se convierte en un detector de correos válidos.
+      setError(
+        (err as { status?: number }).status === 401
+          ? 'Correo o contraseña incorrectos.'
+          : 'No se pudo conectar con el sistema. Intente de nuevo.',
+      );
+      setEnviando(false);
+    }
+  }
 
   return (
-    <main style={{ maxWidth: 640, margin: '0 auto', padding: '96px 26px' }}>
-      <h1 style={{ fontSize: '2.2rem', letterSpacing: '-0.03em', margin: 0 }}>VISION OS</h1>
-      <p style={{ color: '#5A6E85', marginTop: 12 }}>
-        Esqueleto desplegado. El primer módulo con pacientes reales es el inbox de WhatsApp.
-      </p>
+    <main className="acceso">
+      <form className="tarjeta" onSubmit={enviar}>
+        <Marca />
+        <h1 style={{ fontSize: '1.35rem', marginBottom: 6 }}>Sistema administrativo</h1>
+        <p style={{ color: 'var(--mute)', fontSize: '0.9rem', margin: '0 0 26px' }}>
+          Acceso restringido al personal de la clínica.
+        </p>
 
-      <dl
-        style={{
-          marginTop: 40,
-          padding: 24,
-          background: '#fff',
-          border: '1px solid #E4ECF4',
-          borderRadius: 16,
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr',
-          gap: '10px 24px',
-          fontSize: '0.92rem',
-        }}
-      >
-        <dt style={{ color: '#5A6E85' }}>API</dt>
-        <dd style={{ margin: 0 }}>{salud ? salud.status : 'sin respuesta'}</dd>
-        <dt style={{ color: '#5A6E85' }}>Base de datos</dt>
-        <dd style={{ margin: 0 }}>{salud?.database ?? '—'}</dd>
-        <dt style={{ color: '#5A6E85' }}>Commit</dt>
-        <dd style={{ margin: 0, fontFamily: 'ui-monospace, monospace' }}>
-          {salud?.sha?.slice(0, 12) ?? '—'}
-        </dd>
-      </dl>
+        <div className="campo">
+          <label htmlFor="email">Correo</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="username"
+            autoFocus
+            placeholder="nombre@visioncolombia.com.co"
+          />
+        </div>
+
+        <div className="campo">
+          <label htmlFor="password">Contraseña</label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            minLength={8}
+          />
+        </div>
+
+        <button className="btn" type="submit" disabled={enviando}>
+          {enviando ? 'Verificando…' : 'Entrar'}
+        </button>
+
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <p className="pie">
+          Cada acceso queda registrado. Si olvidó su contraseña, solicítela a la administración.
+        </p>
+      </form>
     </main>
   );
 }

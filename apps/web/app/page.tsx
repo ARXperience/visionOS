@@ -1,102 +1,94 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-import { Marca } from '../components/marca';
-import { Panel } from '../components/panel';
-import { type Sesion, entrar, recuperar } from '../lib/api';
+import { Icono } from '../components/icono';
+import { useSesion } from '../components/marco';
+import { api } from '../lib/api';
+import { ETIQUETA_ESTADO, GRUPOS, MODULOS } from '../lib/modulos';
 
-export default function Admin() {
-  const [sesion, setSesion] = useState<Sesion | null>(null);
-  // `null` mientras se comprueba si hay sesión: sin este tercer estado, el
-  // login parpadea en cada recarga antes de que llegue el refresh.
-  const [comprobando, setComprobando] = useState(true);
-
-  useEffect(() => {
-    recuperar()
-      .then(setSesion)
-      .finally(() => setComprobando(false));
-  }, []);
-
-  if (comprobando) return <main className="acceso" aria-busy="true" />;
-  if (sesion) return <Panel sesion={sesion} alSalir={() => setSesion(null)} />;
-  return <Acceso alEntrar={setSesion} />;
+interface Resumen {
+  sedes: number;
+  servicios: number;
 }
 
-function Acceso({ alEntrar }: { alEntrar: (s: Sesion) => void }) {
-  const [enviando, setEnviando] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+export default function CentroDeControl() {
+  const sesion = useSesion();
+  const [resumen, setResumen] = useState<Resumen | null>(null);
 
-  async function enviar(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setEnviando(true);
-    setError(null);
+  useEffect(() => {
+    Promise.all([
+      api.get<unknown[]>('/catalogo/sedes'),
+      api.get<unknown[]>('/catalogo/servicios'),
+    ])
+      .then(([sedes, servicios]) => setResumen({ sedes: sedes.length, servicios: servicios.length }))
+      .catch(() => setResumen(null));
+  }, []);
 
-    const datos = new FormData(e.currentTarget);
-    try {
-      alEntrar(
-        await entrar(String(datos.get('email') ?? ''), String(datos.get('password') ?? '')),
-      );
-    } catch (err) {
-      // Mensaje único: no se distingue "no existe" de "clave incorrecta",
-      // o el formulario se convierte en un detector de correos válidos.
-      setError(
-        (err as { status?: number }).status === 401
-          ? 'Correo o contraseña incorrectos.'
-          : 'No se pudo conectar con el sistema. Intente de nuevo.',
-      );
-      setEnviando(false);
-    }
-  }
+  const listos = MODULOS.filter((m) => m.estado === 'disponible').length;
+  const enObra = MODULOS.filter((m) => m.estado === 'construccion').length;
 
   return (
-    <main className="acceso">
-      <form className="tarjeta" onSubmit={enviar}>
-        <Marca />
-        <h1 style={{ fontSize: '1.35rem', marginBottom: 6 }}>Sistema administrativo</h1>
-        <p style={{ color: 'var(--mute)', fontSize: '0.9rem', margin: '0 0 26px' }}>
-          Acceso restringido al personal de la clínica.
-        </p>
+    <>
+      <h1>Centro de control</h1>
+      <p className="sub">
+        Buenos días, {sesion.firstName}. Esto es lo que el sistema sabe hoy.
+      </p>
 
-        <div className="campo">
-          <label htmlFor="email">Correo</label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            autoComplete="username"
-            autoFocus
-            placeholder="nombre@visioncolombia.com.co"
-          />
-        </div>
+      <div className="cifras">
+        <Cifra valor={resumen?.sedes ?? '—'} etiqueta="Sedes activas" />
+        <Cifra valor={resumen?.servicios ?? '—'} etiqueta="Servicios en catálogo" />
+        <Cifra valor={`${listos + enObra}/${MODULOS.length}`} etiqueta="Módulos iniciados" />
+      </div>
 
-        <div className="campo">
-          <label htmlFor="password">Contraseña</label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            autoComplete="current-password"
-            minLength={8}
-          />
-        </div>
+      {/*
+        El tablero real —citas de hoy, confirmadas, no-shows, conversaciones
+        sin responder— es la entrega E7 y necesita que existan agenda e inbox.
+        Mostrar esos números en cero ahora mismo sería mentir con precisión:
+        parecería un día sin citas, no un módulo sin construir.
+      */}
+      <p className="aviso">
+        Todavía no hay citas, conversaciones ni pacientes: la agenda llega en la entrega E3 y el
+        inbox en la E2. Este tablero mostrará el día real cuando existan — no cifras en cero que
+        parezcan un día vacío.
+      </p>
 
-        <button className="btn" type="submit" disabled={enviando}>
-          {enviando ? 'Verificando…' : 'Entrar'}
-        </button>
+      <h2 style={{ marginTop: 44 }}>El ecosistema</h2>
+      <p className="sub">
+        {MODULOS.length} módulos sobre una sola base de pacientes, sedes, servicios, agenda,
+        conversaciones y eventos. Lo que no está construido lo dice.
+      </p>
 
-        {error && (
-          <p className="error" role="alert">
-            {error}
-          </p>
-        )}
+      {GRUPOS.map((grupo) => (
+        <section key={grupo} style={{ marginTop: 30 }}>
+          <h3 className="grupo-titulo">{grupo}</h3>
+          <div className="rejilla">
+            {MODULOS.filter((m) => m.grupo === grupo).map((m) => (
+              <Link key={m.id || 'inicio'} href={m.id ? `/${m.id}` : '/'} className={`ficha e-${m.estado}`}>
+                <span className="ficha-cab">
+                  <Icono nombre={m.icono} tam={20} />
+                  <b>{m.nombre}</b>
+                </span>
+                <p>{m.resumen}</p>
+                <span className="ficha-pie">
+                  <em className={`estado ${m.estado}`}>{ETIQUETA_ESTADO[m.estado]}</em>
+                  {m.entrega ? <i>{m.entrega}</i> : <i className="fuera">fuera de fase 1</i>}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
 
-        <p className="pie">
-          Cada acceso queda registrado. Si olvidó su contraseña, solicítela a la administración.
-        </p>
-      </form>
-    </main>
+function Cifra({ valor, etiqueta }: { valor: string | number; etiqueta: string }) {
+  return (
+    <div className="cifra">
+      <b>{valor}</b>
+      <span>{etiqueta}</span>
+    </div>
   );
 }

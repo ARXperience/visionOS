@@ -153,51 +153,336 @@ input:focus {
   text-align: center;
 }
 
-/* ── panel ──────────────────────────────────────────── */
-.barra {
-  background: var(--navy);
-  color: #fff;
-  padding: 14px 0;
+
+/* ── marco del panel ────────────────────────────────── */
+.marco {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr);
+  min-height: 100dvh;
 }
-.barra .wrap {
+
+.lateral {
+  background: var(--ink);
+  color: rgba(255, 255, 255, 0.86);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100dvh;
+  overflow-y: auto;
+}
+.lateral-marca {
+  padding: 22px 22px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+.lateral-marca .marca {
+  margin: 0;
+  color: #fff;
+}
+.lateral nav {
+  flex: 1;
+  padding: 16px 12px 24px;
+}
+
+.grupo + .grupo {
+  margin-top: 20px;
+}
+.grupo h3 {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+  font-weight: 600;
+  padding: 0 10px;
+  margin-bottom: 7px;
+}
+
+.enlace {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  text-decoration: none;
+  color: rgba(255, 255, 255, 0.78);
+  transition:
+    background 0.18s var(--e),
+    color 0.18s var(--e);
 }
-.barra .marca i {
-  color: rgba(255, 255, 255, 0.6);
+.enlace:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
 }
-.barra .push {
-  margin-left: auto;
+.enlace.activo {
+  background: var(--cyan);
+  color: #fff;
+}
+.enlace span {
+  flex: 1;
+  min-width: 0;
+}
+/* Marca de estado: lo no construido se ve atenuado en el propio menú, para
+   que nadie descubra que un modulo no existe solo despues de entrar. */
+.enlace.e-construccion,
+.enlace.e-planeado {
+  color: rgba(255, 255, 255, 0.44);
+}
+.enlace.e-planeado:hover,
+.enlace.e-construccion:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+.enlace em {
+  font-style: normal;
+  font-size: 0.7rem;
+  opacity: 0.75;
+}
+
+.lateral-pie {
+  padding: 14px 22px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cabecera {
   display: flex;
   align-items: center;
   gap: 16px;
-  font-size: 0.87rem;
+  padding: 14px 34px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
-.barra button {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  color: #fff;
-  padding: 7px 15px;
+.quien {
+  margin-left: auto;
+  text-align: right;
+  line-height: 1.25;
+}
+.quien b {
+  display: block;
+  font-size: 0.9rem;
+}
+.quien span {
+  font-size: 0.76rem;
+  color: var(--mute);
+  text-transform: capitalize;
+}
+.cabecera button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  border: 1px solid var(--line);
   border-radius: 999px;
+  background: #fff;
+  color: var(--fg);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   cursor: pointer;
+  transition: 0.2s var(--e);
 }
-.barra button:hover {
-  background: rgba(255, 255, 255, 0.22);
-}
-
-.wrap {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 0 24px;
+.cabecera button:hover {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: #fff;
 }
 
-.cuerpo {
-  padding: 40px 0 80px;
+.contenido {
+  padding: 34px 34px 80px;
+  max-width: 1240px;
+}
+.contenido h1 {
+  font-size: 1.85rem;
+}
+.sub {
+  color: var(--mute);
+  margin: 10px 0 0;
+  max-width: 70ch;
+}
+.miga {
+  display: block;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 10px;
+}
+.tenue {
+  color: var(--mute);
+}
+.grupo-titulo {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 13px;
 }
 
+/* ── cifras ─────────────────────────────────────────── */
+.cifras {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+  margin-top: 26px;
+}
+.cifra {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px 22px;
+}
+.cifra b {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--navy);
+  letter-spacing: -0.03em;
+}
+.cifra span {
+  display: block;
+  margin-top: 8px;
+  font-size: 0.84rem;
+  color: var(--mute);
+}
+
+/* ── rejilla de módulos ─────────────────────────────── */
+.rejilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 14px;
+}
+.ficha {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 18px 19px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-decoration: none;
+  transition:
+    transform 0.25s var(--e),
+    box-shadow 0.25s var(--e),
+    border-color 0.25s;
+}
+.ficha:hover {
+  transform: translateY(-3px);
+  border-color: #bfe0ec;
+  box-shadow: 0 20px 40px -24px rgba(7, 26, 54, 0.4);
+}
+.ficha-cab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--navy);
+}
+.ficha-cab b {
+  font-size: 0.96rem;
+}
+.ficha p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--mute);
+  flex: 1;
+}
+.ficha-pie {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.ficha-pie i {
+  font-style: normal;
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--mute);
+  letter-spacing: 0.06em;
+}
+.ficha-pie i.fuera {
+  opacity: 0.7;
+}
+/* Lo planeado se ve claramente distinto de lo que funciona. */
+.ficha.e-planeado,
+.ficha.e-construccion {
+  background: #fbfdff;
+  border-style: dashed;
+}
+
+.estado {
+  font-style: normal;
+  font-size: 0.71rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.estado.disponible {
+  background: #e6f7ec;
+  border: 1px solid #bde5c9;
+  color: #1c6b39;
+}
+.estado.construccion {
+  background: #fff5e0;
+  border: 1px solid #f0dca6;
+  color: #7a5b10;
+}
+.estado.planeado {
+  background: #eef2f7;
+  border: 1px solid #dbe4ee;
+  color: #5a6e85;
+}
+
+/* ── módulo aún no construido ───────────────────────── */
+.pendiente {
+  margin-top: 26px;
+  padding: 30px 32px;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: var(--r);
+  max-width: 74ch;
+}
+.pendiente-estado {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 18px;
+  font-size: 0.9rem;
+  color: var(--mute);
+}
+.pendiente-resumen {
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+.pendiente-nota {
+  margin: 20px 0 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  font-size: 0.86rem;
+  color: var(--mute);
+}
+.volver {
+  display: inline-block;
+  margin-top: 22px;
+  font-size: 0.88rem;
+  color: var(--cyan);
+  text-decoration: none;
+  font-weight: 600;
+}
+.volver:hover {
+  text-decoration: underline;
+}
+
+/* ── tabla ──────────────────────────────────────────── */
 .tabla {
   width: 100%;
   border-collapse: collapse;
@@ -209,16 +494,17 @@ input:focus {
 .tabla th,
 .tabla td {
   text-align: left;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--line);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 .tabla th {
   background: #f8fbfe;
-  font-size: 0.76rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--mute);
+  font-weight: 600;
 }
 .tabla tr:last-child td {
   border-bottom: 0;
@@ -226,9 +512,9 @@ input:focus {
 
 .pill {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: 999px;
-  font-size: 0.74rem;
+  font-size: 0.73rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   background: #e8f6fa;
@@ -237,11 +523,28 @@ input:focus {
 }
 
 .aviso {
-  margin: 22px 0 0;
-  padding: 14px 18px;
+  margin: 26px 0 0;
+  padding: 15px 19px;
   border-radius: 12px;
   background: #fff8e6;
   border: 1px solid #f3e0a8;
   color: #6b5310;
-  font-size: 0.89rem;
+  font-size: 0.88rem;
+  max-width: 84ch;
+}
+
+@media (max-width: 980px) {
+  .marco {
+    grid-template-columns: 1fr;
+  }
+  .lateral {
+    position: static;
+    height: auto;
+  }
+  .contenido {
+    padding: 26px 20px 60px;
+  }
+  .cabecera {
+    padding: 12px 20px;
+  }
 }

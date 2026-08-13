@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 
+import { Marco } from '../components/marco';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -17,7 +18,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body>
+        {/* El marco decide: sin sesión pinta el acceso, con sesión el panel. */}
+        <Marco>{children}</Marco>
+      </body>
     </html>
   );
 }

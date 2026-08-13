@@ -21,6 +21,16 @@ import { join } from 'node:path';
 import { festivosDe } from '../src/common/utils/festivos.util';
 import { HashUtil } from '../src/common/utils/hash.util';
 
+// El CLI de Prisma carga .env solo; ts-node no. `loadEnvFile` es de Node
+// (>=20.12), asi que no hace falta dotenv.
+if (!process.env.DATABASE_URL) {
+  try {
+    process.loadEnvFile(join(__dirname, '..', '.env'));
+  } catch {
+    // En el contenedor las variables vienen del entorno, no de un archivo.
+  }
+}
+
 const prisma = new PrismaClient();
 
 interface ServicioSembrado {

@@ -5,5 +5,6 @@ module.exports = {
   rootDir: '.',
   testRegex: '.*\\.spec\\.ts$',
   moduleFileExtensions: ['js', 'json', 'ts'],
+  setupFiles: ['<rootDir>/test/env.ts'],
   // Sin --passWithNoTests, a proposito. Si no hay pruebas, falla.
 };

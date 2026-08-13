@@ -17,8 +17,13 @@ generator client {
 }
 
 datasource db {
-  provider   = "postgresql"
-  url        = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  // Neon sirve dos endpoints: uno agrupado por pgbouncer (el que usa la
+  // aplicacion) y uno directo. Las migraciones NO pasan por el agrupado
+  // —necesitan sesion y transacciones largas—, de ahi directUrl. En el VPS,
+  // donde Postgres es local, las dos apuntan al mismo sitio.
+  directUrl  = env("DIRECT_DATABASE_URL")
   extensions = [pg_trgm, unaccent, btree_gist, uuid_ossp(map: "uuid-ossp")]
 }
 

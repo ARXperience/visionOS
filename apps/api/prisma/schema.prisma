@@ -17,8 +17,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
   // Neon sirve dos endpoints: uno agrupado por pgbouncer (el que usa la
   // aplicacion) y uno directo. Las migraciones NO pasan por el agrupado
   // —necesitan sesion y transacciones largas—, de ahi directUrl. En el VPS,
@@ -95,6 +95,64 @@ enum ConsentPurpose {
   HISTORIA_CLINICA
   IMAGENES
   TELECONSULTA
+}
+
+enum ChannelProvider {
+  BAILEYS
+  META_CLOUD
+  WEB
+  EMAIL
+  TELEFONO
+  PRESENCIAL
+}
+
+enum ChannelStatus {
+  DESCONECTADO
+  ESPERANDO_QR
+  CONECTANDO
+  CONECTADO
+  /// WhatsApp cerro la sesion. Es el estado que hay que vigilar: puede ser
+  /// un cierre normal o el sintoma de un baneo del numero.
+  CERRADA_POR_WHATSAPP
+  ERROR
+}
+
+enum ConversationStatus {
+  ABIERTA
+  PENDIENTE
+  CERRADA
+}
+
+enum MessageDirection {
+  ENTRANTE
+  SALIENTE
+}
+
+enum MessageAuthor {
+  PACIENTE
+  AGENTE
+  IA
+  SISTEMA
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  AUDIO
+  VIDEO
+  DOCUMENT
+  LOCATION
+  STICKER
+  CONTACT
+  SYSTEM
+}
+
+enum MessageStatus {
+  PENDIENTE
+  ENVIADO
+  ENTREGADO
+  LEIDO
+  FALLIDO
 }
 
 enum BusinessLine {
@@ -199,6 +257,8 @@ model Site {
   userAccess     UserSiteAccess[]
   professionals  ProfessionalSite[]
   availabilities ProfessionalAvailability[]
+  channels       Channel[]
+  conversations  Conversation[]
 
   @@map("sites")
 }
@@ -330,6 +390,8 @@ model User {
   auditLogs     AuditLog[]
   professional  Professional?
   consents      DataConsent[]
+  conversations Conversation[]
+  messages      Message[]
 
   @@index([role, status])
   @@map("users")
@@ -466,8 +528,9 @@ model Person {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  coverages Coverage[]
-  consents  DataConsent[]
+  coverages     Coverage[]
+  consents      DataConsent[]
+  conversations Conversation[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -671,4 +734,146 @@ model Holiday {
   isNational Boolean  @default(true) @map("is_national")
 
   @@map("holidays")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CANAL, CONVERSACION Y MENSAJE
+// ═══════════════════════════════════════════════════════════════════
+
+/// Un canal es una linea por la que entra o sale un mensaje. Hoy solo hay
+/// Baileys; el enum existe para que anadir Cloud API manana sea una fila y
+/// un adaptador, no una migracion de todo lo que cuelga de aqui.
+model Channel {
+  id          String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  provider    ChannelProvider
+  name        String
+  phoneNumber String?         @map("phone_number")
+  /// null = linea central de la clinica. Con fila, atiende una sede.
+  siteId      String?         @map("site_id") @db.Uuid
+  status      ChannelStatus   @default(DESCONECTADO)
+
+  /// Credenciales de sesion de Baileys, CIFRADAS con AES-256-GCM.
+  ///
+  /// No van en disco. `useMultiFileAuthState` las escribe en texto plano en
+  /// una carpeta: quien lea ese directorio se hace pasar por la clinica en
+  /// WhatsApp, y ademas se pierden al recrear el contenedor y toca volver a
+  /// escanear el QR. Aqui viajan cifradas con WHATSAPP_AUTH_ENCRYPTION_KEY,
+  /// que vive en el entorno y nunca en la base.
+  /// Formato `iv.tag.ciphertext` en base64, en una sola columna. Tres
+  /// columnas separadas solo multiplicaban las formas de escribir una y
+  /// olvidar otra, y ninguna se consulta por su cuenta.
+  authState String? @map("auth_state")
+
+  /// El QR solo existe mientras la sesion espera escaneo, y caduca.
+  qrCode      String?   @map("qr_code")
+  qrExpiresAt DateTime? @map("qr_expires_at") @db.Timestamptz(3)
+
+  isDefault       Boolean   @default(false) @map("is_default")
+  lastConnectedAt DateTime? @map("last_connected_at") @db.Timestamptz(3)
+  /// Motivo de la ultima caida. `loggedOut` es el que hay que mirar: es el
+  /// sintoma de que WhatsApp cerro la sesion, posiblemente por baneo.
+  lastError       String?   @map("last_error")
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  site          Site?          @relation(fields: [siteId], references: [id])
+  conversations Conversation[]
+
+  @@index([provider, status])
+  @@map("channels")
+}
+
+/// Existe ANTES de que haya paciente: el primer mensaje de un numero
+/// desconocido ya crea Person y Conversation. `personId` se llena en cuanto
+/// el bot o recepcion identifica a quien escribe, sin re-parentar nada.
+model Conversation {
+  id           String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  channelId    String  @map("channel_id") @db.Uuid
+  /// remoteJid de WhatsApp. Con channelId forma la clave natural.
+  externalId   String  @map("external_id")
+  personId     String? @map("person_id") @db.Uuid
+  assignedToId String? @map("assigned_to_id") @db.Uuid
+  /// Sede que atiende. Puede cambiar; no aisla al paciente.
+  siteId       String? @map("site_id") @db.Uuid
+
+  contactName   String?            @map("contact_name")
+  phoneNumber   String?            @map("phone_number")
+  status        ConversationStatus @default(ABIERTA)
+  /// true = el asistente responde. Recepcion lo apaga al tomar el caso, y
+  /// el handoff lo apaga solo cuando detecta que hace falta un humano.
+  aiEnabled     Boolean            @default(true) @map("ai_enabled")
+  aiSummary     String?            @map("ai_summary")
+  aiPausedUntil DateTime?          @map("ai_paused_until") @db.Timestamptz(3)
+
+  unreadCount     Int       @default(0) @map("unread_count")
+  lastMessageAt   DateTime? @map("last_message_at") @db.Timestamptz(3)
+  lastMessageText String?   @map("last_message_text")
+
+  tags      String[]  @default([])
+  metadata  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  channel    Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  person     Person?   @relation(fields: [personId], references: [id])
+  assignedTo User?     @relation(fields: [assignedToId], references: [id])
+  site       Site?     @relation(fields: [siteId], references: [id])
+  messages   Message[]
+
+  @@unique([channelId, externalId])
+  @@index([status, lastMessageAt(sort: Desc)])
+  @@index([personId])
+  @@index([assignedToId, status])
+  @@index([siteId, status])
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  /// Id del proveedor. Unico: es lo que impide duplicar un mensaje cuando
+  /// Baileys reemite el mismo evento tras reconectar.
+  externalId     String?          @unique @map("external_id")
+  direction      MessageDirection
+  author         MessageAuthor    @default(PACIENTE)
+  type           MessageType      @default(TEXT)
+  status         MessageStatus    @default(PENDIENTE)
+
+  body      String?
+  mediaUrl  String? @map("media_url")
+  mediaMime String? @map("media_mime")
+  mediaSize Int?    @map("media_size")
+  fileName  String? @map("file_name")
+
+  /// Nota interna: se ve en el panel y NO se envia al paciente. Sin esto,
+  /// el equipo se coordina por fuera y el contexto se pierde.
+  isInternal Boolean @default(false) @map("is_internal")
+
+  quotedExternalId String? @map("quoted_external_id")
+  sentById         String? @map("sent_by_id") @db.Uuid
+  /// Traza de la ejecucion del asistente cuando author = IA.
+  aiRunId          String? @map("ai_run_id")
+
+  /// Clave de idempotencia del envio: reintentar no debe duplicar el mensaje
+  /// que el paciente recibe.
+  idempotencyKey String? @unique @map("idempotency_key")
+
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz(3)
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(3)
+  readAt      DateTime? @map("read_at") @db.Timestamptz(3)
+  failedAt    DateTime? @map("failed_at") @db.Timestamptz(3)
+  error       String?
+
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sentBy       User?        @relation(fields: [sentById], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([status, createdAt])
+  @@map("messages")
 }

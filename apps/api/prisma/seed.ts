@@ -18,6 +18,7 @@ import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { sembrarDemo } from './demo';
 import { festivosDe } from '../src/common/utils/festivos.util';
 import { HashUtil } from '../src/common/utils/hash.util';
 
@@ -178,6 +179,10 @@ async function main(): Promise<void> {
       console.log(`contraseña:   ${password}`);
       console.log('Cámbiela al primer ingreso. No se vuelve a mostrar.');
     }
+  }
+
+  if (process.env.SEED_DEMO === '1') {
+    await sembrarDemo(prisma);
   }
 
   if (porRevisar.length) {

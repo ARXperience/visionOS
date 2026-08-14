@@ -97,6 +97,43 @@ enum ConsentPurpose {
   TELECONSULTA
 }
 
+/// Ruta del paciente. Anadir valores es barato; quitarlos no.
+enum AppointmentStatus {
+  PROGRAMADA
+  CONFIRMADA
+  LLEGO
+  EN_ADMISION
+  EN_ESPERA
+  EN_ATENCION
+  EN_PROCEDIMIENTO
+  PARA_FACTURAR
+  FINALIZADA
+  NO_ASISTIO
+  CANCELADA
+}
+
+enum CancelActor {
+  PACIENTE
+  CLINICA
+  PROFESIONAL
+  ASEGURADOR
+  SISTEMA
+}
+
+enum ResourceKind {
+  PROFESSIONAL
+  ROOM
+  EQUIPMENT
+}
+
+/// Ojo derecho, izquierdo, ambos o no aplica.
+enum Laterality {
+  OD
+  OI
+  AO
+  NA
+}
+
 enum ChannelProvider {
   BAILEYS
   META_CLOUD
@@ -259,6 +296,8 @@ model Site {
   availabilities ProfessionalAvailability[]
   channels       Channel[]
   conversations  Conversation[]
+  appointments   Appointment[]
+  bookings       ResourceBooking[]
 
   @@map("sites")
 }
@@ -275,7 +314,8 @@ model Room {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  site Site @relation(fields: [siteId], references: [id])
+  site     Site              @relation(fields: [siteId], references: [id])
+  bookings ResourceBooking[]
 
   @@unique([siteId, code])
   @@index([siteId, kind, isActive])
@@ -301,7 +341,8 @@ model Equipment {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  site Site @relation(fields: [siteId], references: [id])
+  site     Site              @relation(fields: [siteId], references: [id])
+  bookings ResourceBooking[]
 
   @@unique([siteId, code])
   @@index([siteId, modality, isActive])
@@ -351,6 +392,7 @@ model Service {
 
   prices        ServicePrice[]
   professionals ServiceProfessional[]
+  appointments  Appointment[]
 
   @@index([businessLine, isActive])
   @@map("services")
@@ -385,13 +427,16 @@ model User {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  siteAccess    UserSiteAccess[]
-  refreshTokens RefreshToken[]
-  auditLogs     AuditLog[]
-  professional  Professional?
-  consents      DataConsent[]
-  conversations Conversation[]
-  messages      Message[]
+  siteAccess          UserSiteAccess[]
+  refreshTokens       RefreshToken[]
+  auditLogs           AuditLog[]
+  professional        Professional?
+  consents            DataConsent[]
+  conversations       Conversation[]
+  messages            Message[]
+  createdAppointments Appointment[]            @relation("CreadorDeCita")
+  statusEvents        AppointmentStatusEvent[]
+  bookings            ResourceBooking[]
 
   @@index([role, status])
   @@map("users")
@@ -531,6 +576,7 @@ model Person {
   coverages     Coverage[]
   consents      DataConsent[]
   conversations Conversation[]
+  appointments  Appointment[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -557,8 +603,9 @@ model Payer {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  coverages Coverage[]
-  prices    ServicePrice[]
+  coverages    Coverage[]
+  prices       ServicePrice[]
+  appointments Appointment[]
 
   @@index([type, isActive])
   @@map("payers")
@@ -581,8 +628,9 @@ model Coverage {
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
-  payer  Payer  @relation(fields: [payerId], references: [id])
+  person       Person        @relation(fields: [personId], references: [id], onDelete: Cascade)
+  payer        Payer         @relation(fields: [payerId], references: [id])
+  appointments Appointment[]
 
   @@index([personId, isPrimary])
   @@index([payerId])
@@ -643,6 +691,7 @@ model Professional {
   sites          ProfessionalSite[]
   availabilities ProfessionalAvailability[]
   services       ServiceProfessional[]
+  bookings       ResourceBooking[]
 
   @@unique([docType, docNumber])
   @@index([isActive, type])
@@ -817,11 +866,12 @@ model Conversation {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  channel    Channel   @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  person     Person?   @relation(fields: [personId], references: [id])
-  assignedTo User?     @relation(fields: [assignedToId], references: [id])
-  site       Site?     @relation(fields: [siteId], references: [id])
-  messages   Message[]
+  channel      Channel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  person       Person?       @relation(fields: [personId], references: [id])
+  assignedTo   User?         @relation(fields: [assignedToId], references: [id])
+  site         Site?         @relation(fields: [siteId], references: [id])
+  messages     Message[]
+  appointments Appointment[]
 
   @@unique([channelId, externalId])
   @@index([status, lastMessageAt(sort: Desc)])
@@ -876,4 +926,150 @@ model Message {
   @@index([conversationId, createdAt])
   @@index([status, createdAt])
   @@map("messages")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AGENDA
+// ═══════════════════════════════════════════════════════════════════
+
+model Appointment {
+  id         String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  /// Codigo corto para decirselo al paciente por WhatsApp: VC-4F7K2.
+  publicCode String @unique @map("public_code")
+
+  siteId    String            @map("site_id") @db.Uuid
+  personId  String            @map("person_id") @db.Uuid
+  serviceId String            @map("service_id") @db.Uuid
+  status    AppointmentStatus @default(PROGRAMADA)
+
+  startsAt   DateTime   @map("starts_at") @db.Timestamptz(3)
+  endsAt     DateTime   @map("ends_at") @db.Timestamptz(3)
+  laterality Laterality @default(NA)
+
+  // Ganchos de facturacion. Hoy informativos; el dia que entre la emision
+  // electronica ya estaran llenos en vez de haber que retrollenarlos.
+  payerId             String?  @map("payer_id") @db.Uuid
+  coverageId          String?  @map("coverage_id") @db.Uuid
+  authorizationNumber String?  @map("authorization_number")
+  referralFileUrl     String?  @map("referral_file_url")
+  quotedPrice         Decimal? @map("quoted_price") @db.Decimal(14, 2)
+
+  createdVia     ChannelProvider @default(PRESENCIAL) @map("created_via")
+  createdById    String?         @map("created_by_id") @db.Uuid
+  conversationId String?         @map("conversation_id") @db.Uuid
+
+  // Marcas desnormalizadas del recorrido. La verdad esta en
+  // AppointmentStatusEvent; esto existe para que el tablero del dia sea una
+  // consulta y no un agregado sobre el historial.
+  confirmedAt DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  arrivedAt   DateTime? @map("arrived_at") @db.Timestamptz(3)
+  attendedAt  DateTime? @map("attended_at") @db.Timestamptz(3)
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  cancelledAt       DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelActor       CancelActor? @map("cancel_actor")
+  cancelReason      String?      @map("cancel_reason")
+  rescheduledFromId String?      @unique @map("rescheduled_from_id") @db.Uuid
+
+  notes     String?
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  site         Site          @relation(fields: [siteId], references: [id])
+  person       Person        @relation(fields: [personId], references: [id])
+  service      Service       @relation(fields: [serviceId], references: [id])
+  payer        Payer?        @relation(fields: [payerId], references: [id])
+  coverage     Coverage?     @relation(fields: [coverageId], references: [id])
+  createdBy    User?         @relation("CreadorDeCita", fields: [createdById], references: [id])
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+
+  rescheduledFrom Appointment? @relation("Reagenda", fields: [rescheduledFromId], references: [id])
+  rescheduledTo   Appointment? @relation("Reagenda")
+
+  bookings     ResourceBooking[]
+  statusEvents AppointmentStatusEvent[]
+
+  @@index([siteId, startsAt])
+  @@index([siteId, status, startsAt])
+  @@index([personId, startsAt(sort: Desc)])
+  @@index([status, startsAt])
+  @@map("appointments")
+}
+
+/// EL CORAZON DE LA AGENDA.
+///
+/// Una fila por recurso ocupado: una cita de OCT con medico, sala y equipo
+/// genera TRES filas con el mismo rango. Un bloqueo —vacaciones, almuerzo,
+/// mantenimiento— es una fila con appointmentId nulo, y el mismo constraint
+/// lo protege sin una linea de codigo extra.
+///
+/// La no-superposicion NO se valida en la aplicacion: la impone PostgreSQL
+/// con EXCLUDE USING gist. El conflicto aqui no es "dos personas editan la
+/// misma cita" —donde serviria un numero de version— sino "dos personas
+/// crean citas distintas que se solapan", y ahi no hay fila comun sobre la
+/// que competir. Simularlo exigiria un candado a mano en TODOS los caminos
+/// de escritura; uno que se olvide y hay doble reserva.
+model ResourceBooking {
+  id            String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  appointmentId String? @map("appointment_id") @db.Uuid
+  siteId        String  @map("site_id") @db.Uuid
+
+  // Exactamente uno de los tres. Lo impone un CHECK en la migracion.
+  professionalId String?      @map("professional_id") @db.Uuid
+  roomId         String?      @map("room_id") @db.Uuid
+  equipmentId    String?      @map("equipment_id") @db.Uuid
+  kind           ResourceKind
+
+  /// Incluye el buffer del servicio: la reserva puede ser mas ancha que la
+  /// cita, porque el consultorio sigue ocupado mientras se limpia.
+  startsAt DateTime @map("starts_at") @db.Timestamptz(3)
+  endsAt   DateTime @map("ends_at") @db.Timestamptz(3)
+
+  /// El EXCLUDE es PARCIAL sobre active. Cancelar es poner false en la misma
+  /// transaccion que el cambio de estado: libera el cupo sin perder la
+  /// historia de que estuvo reservado.
+  active      Boolean @default(true)
+  blockReason String? @map("block_reason")
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  site         Site          @relation(fields: [siteId], references: [id])
+  professional Professional? @relation(fields: [professionalId], references: [id])
+  room         Room?         @relation(fields: [roomId], references: [id])
+  equipment    Equipment?    @relation(fields: [equipmentId], references: [id])
+  createdBy    User?         @relation(fields: [createdById], references: [id])
+
+  @@index([appointmentId])
+  @@index([professionalId, startsAt])
+  @@index([roomId, startsAt])
+  @@index([equipmentId, startsAt])
+  @@index([siteId, startsAt])
+  @@map("resource_bookings")
+}
+
+/// Historial de transicion, append-only. Es la fuente de verdad del
+/// recorrido y de los indicadores: oportunidad de cita, tiempo de espera,
+/// tasa de no-show. Sin esta tabla habria que instrumentar retroactivamente,
+/// que es imposible.
+model AppointmentStatusEvent {
+  id            String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  appointmentId String             @map("appointment_id") @db.Uuid
+  fromStatus    AppointmentStatus? @map("from_status")
+  toStatus      AppointmentStatus  @map("to_status")
+  reason        String?
+  byUserId      String?            @map("by_user_id") @db.Uuid
+  /// Para transiciones automaticas: "job:barrido_no_show", "wa:confirmacion".
+  bySystem      String?            @map("by_system")
+  occurredAt    DateTime           @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  metadata      Json               @default("{}")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  byUser      User?       @relation(fields: [byUserId], references: [id])
+
+  @@index([appointmentId, occurredAt])
+  @@index([toStatus, occurredAt])
+  @@map("appointment_status_events")
 }

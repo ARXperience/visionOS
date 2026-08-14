@@ -55,7 +55,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Agenda clínica',
     grupo: 'Operación',
     icono: 'calendario',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
       'Sede, consultorio, profesional y equipo a la vez. La base impide la doble reserva, no la aplicación.',
     entrega: 'E3',
@@ -66,7 +66,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Recepción y admisión',
     grupo: 'Operación',
     icono: 'puerta',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
       'Check-in, documentos pendientes, autorización, sala de espera y llamado. Programado → llegó → en atención → finalizado.',
     entrega: 'E3',
@@ -90,7 +90,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Paciente 360°',
     grupo: 'Pacientes',
     icono: 'persona',
-    estado: 'planeado',
+    estado: 'construccion',
     resumen:
       'Ficha única con identificación, aseguradores, citas, órdenes, documentos y toda la conversación, en una sola línea de tiempo.',
     entrega: 'E4',

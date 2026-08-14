@@ -7,10 +7,12 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
+import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { PatientsModule } from './modules/patients/patients.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -31,6 +33,8 @@ import { PrismaModule } from './prisma/prisma.module';
     CatalogModule,
     ChannelsModule,
     ConversationsModule,
+    AppointmentsModule,
+    PatientsModule,
   ],
   controllers: [HealthController],
   providers: [

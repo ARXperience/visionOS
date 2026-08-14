@@ -857,3 +857,139 @@ input:focus {
     min-height: 420px;
   }
 }
+
+/* ── agenda y recepción ─────────────────────────────── */
+.filtros {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+  flex-wrap: wrap;
+}
+select,
+input[type='date'] {
+  padding: 9px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  background: #fff;
+  color: var(--fg);
+}
+
+.acciones {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.btn-mini.peligro:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.panel-agendar {
+  margin-top: 20px;
+  padding: 20px 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.fila-agendar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.fila-agendar select {
+  min-width: 280px;
+}
+
+.huecos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.hueco {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.18s var(--e);
+}
+.hueco:hover:not(:disabled) {
+  border-color: var(--cyan);
+  background: #f2fbfd;
+}
+.hueco:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.hueco b {
+  font-size: 0.98rem;
+}
+.hueco span {
+  font-size: 0.76rem;
+  color: var(--mute);
+}
+
+/* Tablero de recepción: una columna por estado del recorrido. */
+.tablero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 24px;
+  align-items: start;
+}
+.columna {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px;
+}
+.columna h2 {
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--mute);
+  margin-bottom: 12px;
+}
+.vacia {
+  color: var(--mute);
+  margin: 0;
+}
+.tarjeta-cita {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  margin-bottom: 9px;
+  background: #fbfdff;
+}
+.tarjeta-cita b {
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+.tarjeta-cita .nombre {
+  font-size: 0.89rem;
+  font-weight: 500;
+}
+.tarjeta-cita .tenue {
+  font-size: 0.79rem;
+}
+.tarjeta-cita .acciones {
+  margin-top: 7px;
+}
+.dilata {
+  font-size: 0.74rem;
+  color: #7a5b10;
+  background: #fff8e6;
+  border: 1px solid #f3e0a8;
+  border-radius: 7px;
+  padding: 3px 7px;
+  margin-top: 3px;
+}

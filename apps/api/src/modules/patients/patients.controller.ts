@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query, Req } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import type { Request } from 'express';
@@ -7,6 +7,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RequirePermission } from '../../common/decorators/require-permission.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { PatientsService } from './patients.service';
 
 const DOCS = ['CC', 'TI', 'CE', 'PA', 'RC', 'NIT', 'MS', 'AS', 'PE', 'PT', 'CN', 'SC', 'DE'] as const;
 
@@ -27,6 +28,7 @@ export class PatientsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly pacientes: PatientsService,
   ) {}
 
   /**
@@ -118,5 +120,23 @@ export class PatientsController {
     });
 
     return creada;
+  }
+
+  /**
+   * Ficha completa con el recorrido: el Paciente 360.
+   *
+   * Va la ÚLTIMA a propósito. Nest resuelve las rutas por orden de
+   * declaración, así que un ':id' declarado antes se tragaría
+   * /pacientes/buscar — y con ParseUUIDPipe daría un 400 incomprensible
+   * en vez de buscar.
+   */
+  @RequirePermission('patient.read')
+  @Get(':id')
+  ficha(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User, @Req() req: Request) {
+    return this.pacientes.ficha(id, {
+      user,
+      ip: req.ip ?? null,
+      userAgent: req.headers['user-agent'] ?? null,
+    });
   }
 }

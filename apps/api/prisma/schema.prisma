@@ -134,6 +134,55 @@ enum Laterality {
   NA
 }
 
+/// Tipos de la linea de tiempo. Es una proyeccion: anadir tipos no rompe nada.
+enum PatientEventType {
+  PRIMER_CONTACTO
+  MENSAJE_ENTRANTE
+  MENSAJE_SALIENTE
+  INTERES_DETECTADO
+  COTIZACION_ENVIADA
+  LEAD_CREADO
+  LEAD_PERDIDO
+  CITA_CREADA
+  CITA_CONFIRMADA
+  CITA_REAGENDADA
+  CITA_CANCELADA
+  CHECKIN
+  ATENDIDO
+  NO_ASISTIO
+  CONSENTIMIENTO_OTORGADO
+  CONSENTIMIENTO_REVOCADO
+  NOTA_MANUAL
+}
+
+enum LeadStatus {
+  NUEVO
+  CONTACTADO
+  CALIFICADO
+  COTIZADO
+  AGENDADO
+  CONVERTIDO
+  PERDIDO
+}
+
+enum NotificationKind {
+  RECORDATORIO_24H
+  RECORDATORIO_2H
+  SOLICITUD_CONFIRMACION
+  PREPARACION
+  CANCELACION
+  LISTA_ESPERA
+}
+
+enum NotificationOutcome {
+  PENDIENTE
+  ENVIADO
+  CONFIRMO
+  CANCELO
+  SIN_RESPUESTA
+  FALLIDO
+}
+
 enum ChannelProvider {
   BAILEYS
   META_CLOUD
@@ -298,6 +347,9 @@ model Site {
   conversations  Conversation[]
   appointments   Appointment[]
   bookings       ResourceBooking[]
+  events         PatientEvent[]
+  leads          Lead[]
+  waitlist       WaitlistEntry[]
 
   @@map("sites")
 }
@@ -393,6 +445,8 @@ model Service {
   prices        ServicePrice[]
   professionals ServiceProfessional[]
   appointments  Appointment[]
+  leads         Lead[]
+  waitlist      WaitlistEntry[]
 
   @@index([businessLine, isActive])
   @@map("services")
@@ -435,6 +489,8 @@ model User {
   conversations       Conversation[]
   messages            Message[]
   createdAppointments Appointment[]            @relation("CreadorDeCita")
+  patientEvents       PatientEvent[]
+  leads               Lead[]
   statusEvents        AppointmentStatusEvent[]
   bookings            ResourceBooking[]
 
@@ -573,10 +629,13 @@ model Person {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  coverages     Coverage[]
-  consents      DataConsent[]
-  conversations Conversation[]
-  appointments  Appointment[]
+  coverages       Coverage[]
+  consents        DataConsent[]
+  conversations   Conversation[]
+  appointments    Appointment[]
+  events          PatientEvent[]
+  leads           Lead[]
+  waitlistEntries WaitlistEntry[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -872,6 +931,7 @@ model Conversation {
   site         Site?         @relation(fields: [siteId], references: [id])
   messages     Message[]
   appointments Appointment[]
+  leads        Lead[]
 
   @@unique([channelId, externalId])
   @@index([status, lastMessageAt(sort: Desc)])
@@ -987,8 +1047,10 @@ model Appointment {
   rescheduledFrom Appointment? @relation("Reagenda", fields: [rescheduledFromId], references: [id])
   rescheduledTo   Appointment? @relation("Reagenda")
 
-  bookings     ResourceBooking[]
-  statusEvents AppointmentStatusEvent[]
+  bookings      ResourceBooking[]
+  statusEvents  AppointmentStatusEvent[]
+  notifications AppointmentNotification[]
+  waitlistFills WaitlistEntry[]           @relation("CupoOcupado")
 
   @@index([siteId, startsAt])
   @@index([siteId, status, startsAt])
@@ -1072,4 +1134,139 @@ model AppointmentStatusEvent {
   @@index([appointmentId, occurredAt])
   @@index([toStatus, occurredAt])
   @@map("appointment_status_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LINEA DE TIEMPO Y COMERCIAL
+// ═══════════════════════════════════════════════════════════════════
+
+/// Log de eventos de dominio, append-only, escrito EN LA MISMA TRANSACCION
+/// que el cambio que lo origina.
+///
+/// NO es event sourcing: la verdad sigue en las tablas normalizadas. Esta
+/// tabla es una PROYECCION desechable y reconstruible.
+///
+/// Se gana que el Paciente 360 sea una consulta indexada en vez de un UNION
+/// de quince tablas que habria que reescribir cada vez que entra un modulo
+/// nuevo: facturacion, optica o cirugia solo insertan una fila aqui.
+///
+/// Se pierde que es dato duplicado y puede derivar. Mitigacion, en este
+/// orden: una sola funcion escribe aqui (`TimelineService.emitir`); la tabla
+/// se reconstruye entera con `scripts/reconstruir-timeline.ts`; y nunca se
+/// lee para tomar una decision — es una pantalla.
+model PatientEvent {
+  id          String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId    String           @map("person_id") @db.Uuid
+  type        PatientEventType
+  occurredAt  DateTime         @default(now()) @map("occurred_at") @db.Timestamptz(3)
+  siteId      String?          @map("site_id") @db.Uuid
+  actorUserId String?          @map("actor_user_id") @db.Uuid
+
+  /// Texto ya compuesto para la pantalla: "Agendó OCT con Dra. Ruiz".
+  title String
+
+  /// Puntero al registro real. Sin clave foranea a proposito y
+  /// deliberadamente debil: el timeline sobrevive al borrado del origen.
+  refType String? @map("ref_type")
+  refId   String? @map("ref_id") @db.Uuid
+
+  payload Json @default("{}")
+
+  person Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+  site   Site?  @relation(fields: [siteId], references: [id])
+  actor  User?  @relation(fields: [actorUserId], references: [id])
+
+  @@index([personId, occurredAt(sort: Desc)])
+  @@index([type, occurredAt])
+  @@index([refType, refId])
+  @@map("patient_events")
+}
+
+/// Oportunidad comercial. SIEMPRE cuelga de una Person, que puede no ser
+/// paciente todavia: es lo que permite ver "escribio por WhatsApp -> pidio
+/// informacion -> agendo" sin re-parentar nada por el camino.
+model Lead {
+  id                String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId          String          @map("person_id") @db.Uuid
+  conversationId    String?         @map("conversation_id") @db.Uuid
+  siteId            String?         @map("site_id") @db.Uuid
+  status            LeadStatus      @default(NUEVO)
+  source            ChannelProvider @default(BAILEYS)
+  interestServiceId String?         @map("interest_service_id") @db.Uuid
+  interestText      String?         @map("interest_text")
+  quotedAmount      Decimal?        @map("quoted_amount") @db.Decimal(14, 2)
+  quotedAt          DateTime?       @map("quoted_at") @db.Timestamptz(3)
+  assignedToId      String?         @map("assigned_to_id") @db.Uuid
+  lostReason        String?         @map("lost_reason")
+  convertedAt       DateTime?       @map("converted_at") @db.Timestamptz(3)
+  metadata          Json            @default("{}")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person          Person        @relation(fields: [personId], references: [id])
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  interestService Service?      @relation(fields: [interestServiceId], references: [id])
+  assignedTo      User?         @relation(fields: [assignedToId], references: [id])
+  site            Site?         @relation(fields: [siteId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([personId])
+  @@map("leads")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RECORDATORIOS
+// ═══════════════════════════════════════════════════════════════════
+
+/// Un recordatorio programado por cita y tipo.
+///
+/// La unicidad de (cita, tipo) es lo que da entrega exactamente-una-vez sin
+/// necesidad de Redis ni de una cola: el planificador puede correr dos veces
+/// o solaparse consigo mismo y el paciente recibe un solo mensaje.
+model AppointmentNotification {
+  id            String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  appointmentId String              @map("appointment_id") @db.Uuid
+  kind          NotificationKind
+  channel       ChannelProvider     @default(BAILEYS)
+  scheduledFor  DateTime            @map("scheduled_for") @db.Timestamptz(3)
+  sentAt        DateTime?           @map("sent_at") @db.Timestamptz(3)
+  outcome       NotificationOutcome @default(PENDIENTE)
+  respondedAt   DateTime?           @map("responded_at") @db.Timestamptz(3)
+  messageId     String?             @map("message_id") @db.Uuid
+  error         String?
+  attempts      Int                 @default(0)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@unique([appointmentId, kind])
+  @@index([outcome, scheduledFor])
+  @@map("appointment_notifications")
+}
+
+/// Lista de espera: a quien ofrecerle el cupo que acaba de liberarse.
+model WaitlistEntry {
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  siteId              String    @map("site_id") @db.Uuid
+  personId            String    @map("person_id") @db.Uuid
+  serviceId           String    @map("service_id") @db.Uuid
+  professionalId      String?   @map("professional_id") @db.Uuid
+  preferredFrom       DateTime? @map("preferred_from") @db.Timestamptz(3)
+  preferredTo         DateTime? @map("preferred_to") @db.Timestamptz(3)
+  /// 0 normal, 100 prioritario (posquirurgico, urgencia relativa).
+  priority            Int       @default(0)
+  isActive            Boolean   @default(true) @map("is_active")
+  notifiedAt          DateTime? @map("notified_at") @db.Timestamptz(3)
+  filledAppointmentId String?   @map("filled_appointment_id") @db.Uuid
+  notes               String?
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  site    Site         @relation(fields: [siteId], references: [id])
+  person  Person       @relation(fields: [personId], references: [id])
+  service Service      @relation(fields: [serviceId], references: [id])
+  filled  Appointment? @relation("CupoOcupado", fields: [filledAppointmentId], references: [id])
+
+  @@index([siteId, serviceId, isActive, priority(sort: Desc)])
+  @@map("waitlist_entries")
 }

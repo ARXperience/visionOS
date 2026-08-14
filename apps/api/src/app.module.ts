@@ -13,6 +13,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { PatientsModule } from './modules/patients/patients.module';
+import { TimelineModule } from './modules/timeline/timeline.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -29,6 +30,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     PrismaModule,
     AuditModule,
+    TimelineModule,
     AuthModule,
     CatalogModule,
     ChannelsModule,

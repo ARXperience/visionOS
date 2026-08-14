@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { TimelineService } from '../timeline/timeline.service';
 
 /** Violación del EXCLUDE: el cupo se ocupó entre que se mostró y se confirmó. */
 const SOLAPAMIENTO = '23P01';
@@ -36,6 +37,7 @@ export class AppointmentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly timeline: TimelineService,
   ) {}
 
   /**
@@ -118,11 +120,29 @@ export class AppointmentsService {
           select: { id: true, publicCode: true, startsAt: true, endsAt: true },
         });
 
-        // Quien agenda ve el nombre y el teléfono del paciente.
         await tx.person.update({
           where: { id: datos.personId },
           data: { isPatient: true, patientSince: new Date() },
         });
+
+        // Dentro de la transacción: si la cita no se crea, el evento tampoco.
+        const nombreServicio = await tx.service.findUniqueOrThrow({
+          where: { id: datos.serviceId },
+          select: { name: true },
+        });
+        await this.timeline.emitir(
+          {
+            personId: datos.personId,
+            type: 'CITA_CREADA',
+            title: `Agendó ${nombreServicio.name} — ${formatoFecha(datos.startsAt)}`,
+            siteId: datos.siteId,
+            actorUserId: ctx.user?.id ?? null,
+            refType: 'appointment',
+            refId: creada.id,
+            payload: { publicCode: creada.publicCode },
+          },
+          tx,
+        );
 
         return creada;
       });
@@ -213,6 +233,24 @@ export class AppointmentsService {
         },
       });
 
+      // Solo los hitos que una persona querría ver en la ficha. Proyectar
+      // las once transiciones convertiría el recorrido en un log ilegible.
+      const hito = HITOS[nuevo];
+      if (hito) {
+        await this.timeline.emitir(
+          {
+            personId: cita.personId,
+            type: hito.tipo,
+            title: hito.texto(actualizada.publicCode, ctx.motivo),
+            siteId: cita.siteId,
+            actorUserId: ctx.user?.id ?? null,
+            refType: 'appointment',
+            refId: id,
+          },
+          tx,
+        );
+      }
+
       return actualizada;
     });
   }
@@ -242,6 +280,29 @@ export class AppointmentsService {
     });
   }
 }
+
+/** Qué transiciones merecen una línea en el recorrido del paciente. */
+const HITOS: Partial<
+  Record<AppointmentStatus, { tipo: 'CITA_CONFIRMADA' | 'CITA_CANCELADA' | 'CHECKIN' | 'ATENDIDO' | 'NO_ASISTIO'; texto: (codigo: string, motivo?: string) => string }>
+> = {
+  CONFIRMADA: { tipo: 'CITA_CONFIRMADA', texto: (c) => `Confirmó la cita ${c}` },
+  LLEGO: { tipo: 'CHECKIN', texto: (c) => `Llegó a la cita ${c}` },
+  FINALIZADA: { tipo: 'ATENDIDO', texto: (c) => `Fue atendido — cita ${c}` },
+  NO_ASISTIO: { tipo: 'NO_ASISTIO', texto: (c) => `No asistió a la cita ${c}` },
+  CANCELADA: {
+    tipo: 'CITA_CANCELADA',
+    texto: (c, motivo) => `Canceló la cita ${c}${motivo ? `: ${motivo}` : ''}`,
+  },
+};
+
+const formatoFecha = (d: Date) =>
+  d.toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 
 const esSolapamiento = (e: unknown): boolean =>
   e instanceof Prisma.PrismaClientUnknownRequestError

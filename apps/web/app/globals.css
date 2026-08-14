@@ -993,3 +993,99 @@ input[type='date'] {
   padding: 3px 7px;
   margin-top: 3px;
 }
+
+/* ── ficha del paciente ─────────────────────────────── */
+.ficha {
+  display: grid;
+  grid-template-columns: 340px minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+  align-items: start;
+}
+.ficha-datos,
+.ficha-recorrido {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 22px 24px;
+}
+.ficha-datos h2 {
+  font-size: 1.25rem;
+  margin-bottom: 16px;
+}
+.ficha-datos dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 16px;
+  margin: 0;
+  font-size: 0.88rem;
+}
+.ficha-datos dt {
+  color: var(--mute);
+}
+.ficha-datos dd {
+  margin: 0;
+}
+.lista-plana {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  font-size: 0.88rem;
+}
+.lista-plana li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* La línea de tiempo: una consulta a patient_events, no quince UNION. */
+.linea {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 6px;
+  position: relative;
+}
+.linea::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--line);
+}
+.linea li {
+  display: flex;
+  gap: 14px;
+  padding: 9px 0;
+  position: relative;
+}
+.punto {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #e8f6fa;
+  border: 1px solid #cbe8f1;
+  color: #0b6e8a;
+  display: grid;
+  place-items: center;
+  z-index: 1;
+}
+.linea b {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.linea .tenue {
+  font-size: 0.77rem;
+}
+
+@media (max-width: 980px) {
+  .ficha {
+    grid-template-columns: 1fr;
+  }
+}

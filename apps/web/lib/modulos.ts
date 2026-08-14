@@ -90,7 +90,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Paciente 360°',
     grupo: 'Pacientes',
     icono: 'persona',
-    estado: 'construccion',
+    estado: 'disponible',
     resumen:
       'Ficha única con identificación, aseguradores, citas, órdenes, documentos y toda la conversación, en una sola línea de tiempo.',
     entrega: 'E4',

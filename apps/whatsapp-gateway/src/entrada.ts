@@ -71,6 +71,21 @@ export async function guardarEntrante(prisma: PrismaClient, m: Entrante): Promis
         },
         select: { id: true, personId: true },
       });
+
+      // El primer contacto abre el recorrido del paciente. Es el evento que
+      // hace que la ficha empiece por "escribió por WhatsApp" y no por la
+      // primera cita, que es lo que la clínica quiere poder ver entero.
+      await tx.patientEvent.create({
+        data: {
+          personId: persona.id,
+          type: 'PRIMER_CONTACTO',
+          title: `Escribió por WhatsApp desde ${telefono}`,
+          siteId: canal.siteId,
+          refType: 'conversation',
+          refId: conv.id,
+          occurredAt: m.recibidoEn,
+        },
+      });
     }
 
     // El id externo es único: si Baileys reemite el mismo mensaje tras

@@ -9,7 +9,7 @@ import { AuditService } from '../audit/audit.service';
 const GATEWAY = process.env.GATEWAY_URL ?? 'http://127.0.0.1:3002';
 
 interface Contexto {
-  user: User;
+  user: User | null;
   ip?: string | null;
   userAgent?: string | null;
 }
@@ -117,7 +117,7 @@ export class ConversationsService {
 
     if (conv.person) {
       await this.audit.readOf(conv.person.id, {
-        userId: ctx.user.id,
+        userId: ctx.user?.id ?? null,
         siteId: conv.siteId,
         ip: ctx.ip,
         userAgent: ctx.userAgent,
@@ -152,7 +152,7 @@ export class ConversationsService {
         status: interno ? 'ENVIADO' : 'PENDIENTE',
         body: texto,
         isInternal: interno,
-        sentById: ctx.user.id,
+        sentById: ctx.user?.id ?? null,
         idempotencyKey: randomUUID(),
         ...(interno ? { sentAt: new Date() } : {}),
       },
@@ -190,6 +190,19 @@ export class ConversationsService {
         data: { status: 'FALLIDO', failedAt: new Date(), error: motivo.slice(0, 500) },
       });
     }
+  }
+
+  /**
+   * Mensaje enviado por el sistema, no por una persona: recordatorios y
+   * confirmaciones. Reusa `enviar` para no duplicar el manejo de fallos,
+   * pero queda marcado como SISTEMA en el chat, que es lo honesto.
+   */
+  async enviarSistema(conversationId: string, texto: string) {
+    const m = await this.enviar(conversationId, texto, { user: null }, false);
+    return this.prisma.message.update({
+      where: { id: m.id },
+      data: { author: 'SISTEMA', sentById: null },
+    });
   }
 
   marcarLeida(id: string) {

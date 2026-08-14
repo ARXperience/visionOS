@@ -77,9 +77,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Seguimiento y recordatorios',
     grupo: 'Operación',
     icono: 'campana',
-    estado: 'planeado',
+    estado: 'construccion',
     resumen:
-      'Recordatorio a 24 y 2 horas, confirmación por WhatsApp, no-show y lista de espera que ocupa el cupo liberado.',
+      'El motor ya corre: programa recordatorios a 24 y 2 horas, interpreta la respuesta del paciente y marca no-show solo. Lo que falta es la pantalla para verlo y ajustarlo.',
     entrega: 'E6',
     permiso: 'appointment.read',
   },

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -12,8 +13,10 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { TimelineModule } from './modules/timeline/timeline.module';
+import { RemindersModule } from './modules/reminders/reminders.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -28,6 +31,7 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuditModule,
     TimelineModule,
@@ -37,6 +41,8 @@ import { PrismaModule } from './prisma/prisma.module';
     ConversationsModule,
     AppointmentsModule,
     PatientsModule,
+    RemindersModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [

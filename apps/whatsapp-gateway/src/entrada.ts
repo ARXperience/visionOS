@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 
+import { aplicarRespuesta, interpretar } from './confirmacion.js';
+
 /**
  * Un mensaje que entra crea, si hace falta, la persona y la conversación.
  *
@@ -120,4 +122,23 @@ export async function guardarEntrante(prisma: PrismaClient, m: Entrante): Promis
       },
     });
   });
+
+  // Fuera de la transaccion a proposito: si el mensaje se guardo, ya no se
+  // pierde. Que ademas confirme una cita es un extra, y un fallo aqui no
+  // puede deshacer el guardado del mensaje del paciente.
+  const respuesta = interpretar(m.texto);
+  if (respuesta) {
+    const conv = await prisma.conversation.findUnique({
+      where: { channelId_externalId: { channelId: m.channelId, externalId: m.de } },
+      select: { personId: true },
+    });
+    if (conv?.personId) {
+      const aplicada = await aplicarRespuesta(prisma, conv.personId, respuesta).catch(() => false);
+      if (!aplicada) {
+        // Ni una sola cita candidata, o mas de una: no se adivina. El
+        // mensaje ya esta en el inbox para que lo lea alguien.
+        console.log(`[entrada] "${m.texto}" no se pudo asociar a una cita unica`);
+      }
+    }
+  }
 }

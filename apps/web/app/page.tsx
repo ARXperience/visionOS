@@ -8,51 +8,102 @@ import { useSesion } from '../components/marco';
 import { api } from '../lib/api';
 import { ETIQUETA_ESTADO, GRUPOS, MODULOS } from '../lib/modulos';
 
-interface Resumen {
-  sedes: number;
-  servicios: number;
+interface Tablero {
+  citas: {
+    total: number;
+    confirmadas: number;
+    sinConfirmar: number;
+    enSala: number;
+    atendiendo: number;
+    finalizadas: number;
+    noAsistio: number;
+    canceladas: number;
+  };
+  porSede: { code: string; citas: number }[];
+  conversacionesSinResponder: number;
+  leadsNuevos: number;
+  canales: { id: string; name: string; status: string; lastError: string | null }[];
+  noShowMesAnterior: number | null;
 }
+
+/** Recepción y coordinación lo dejan abierto: se refresca solo. */
+const CADA_MS = 30_000;
 
 export default function CentroDeControl() {
   const sesion = useSesion();
-  const [resumen, setResumen] = useState<Resumen | null>(null);
+  const [t, setT] = useState<Tablero | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      api.get<unknown[]>('/catalogo/sedes'),
-      api.get<unknown[]>('/catalogo/servicios'),
-    ])
-      .then(([sedes, servicios]) => setResumen({ sedes: sedes.length, servicios: servicios.length }))
-      .catch(() => setResumen(null));
+    const cargar = () =>
+      api
+        .get<Tablero>('/tablero')
+        .then(setT)
+        .catch((e: Error) => setError(e.message));
+    void cargar();
+    const id = setInterval(() => void cargar(), CADA_MS);
+    return () => clearInterval(id);
   }, []);
 
-  const listos = MODULOS.filter((m) => m.estado === 'disponible').length;
-  const enObra = MODULOS.filter((m) => m.estado === 'construccion').length;
+  const caidos = (t?.canales ?? []).filter((c) => c.status === 'CERRADA_POR_WHATSAPP' || c.status === 'ERROR');
 
   return (
     <>
       <h1>Centro de control</h1>
       <p className="sub">
-        Buenos días, {sesion.firstName}. Esto es lo que el sistema sabe hoy.
+        Hola, {sesion.firstName}. Esto es el día de hoy, actualizado solo cada{' '}
+        {CADA_MS / 1000} segundos.
       </p>
+
+      {error && <p className="error" role="alert">{error}</p>}
+
+      {/* Lo primero que hay que ver si pasa: sin WhatsApp la clínica pierde
+          su canal principal, y eso no puede estar enterrado en una tabla. */}
+      {caidos.length > 0 && (
+        <p className="alarma" role="alert">
+          <Icono nombre="campana" tam={18} />
+          <span>
+            {caidos.length === 1 ? 'La línea' : 'Las líneas'} <b>{caidos.map((c) => c.name).join(', ')}</b>{' '}
+            {caidos.some((c) => c.status === 'CERRADA_POR_WHATSAPP')
+              ? 'la cerró WhatsApp. No se reintenta sola: requiere que alguien la revise.'
+              : 'está con error.'}{' '}
+            <Link href="/canales">Ver líneas</Link>
+          </span>
+        </p>
+      )}
 
       <div className="cifras">
-        <Cifra valor={resumen?.sedes ?? '—'} etiqueta="Sedes activas" />
-        <Cifra valor={resumen?.servicios ?? '—'} etiqueta="Servicios en catálogo" />
-        <Cifra valor={`${listos + enObra}/${MODULOS.length}`} etiqueta="Módulos iniciados" />
+        <Cifra valor={t?.citas.total} etiqueta="Citas hoy" />
+        <Cifra
+          valor={t?.citas.sinConfirmar}
+          etiqueta="Sin confirmar"
+          alerta={(t?.citas.sinConfirmar ?? 0) > 0}
+        />
+        <Cifra valor={t?.citas.enSala} etiqueta="En sala de espera" />
+        <Cifra valor={t?.citas.atendiendo} etiqueta="En atención" />
+        <Cifra
+          valor={t?.conversacionesSinResponder}
+          etiqueta="Chats sin responder +15 min"
+          alerta={(t?.conversacionesSinResponder ?? 0) > 0}
+        />
+        <Cifra valor={t?.citas.noAsistio} etiqueta="No asistieron hoy" />
       </div>
 
-      {/*
-        El tablero real —citas de hoy, confirmadas, no-shows, conversaciones
-        sin responder— es la entrega E7 y necesita que existan agenda e inbox.
-        Mostrar esos números en cero ahora mismo sería mentir con precisión:
-        parecería un día sin citas, no un módulo sin construir.
-      */}
-      <p className="aviso">
-        Todavía no hay citas, conversaciones ni pacientes: la agenda llega en la entrega E3 y el
-        inbox en la E2. Este tablero mostrará el día real cuando existan — no cifras en cero que
-        parezcan un día vacío.
-      </p>
+      {t && t.porSede.length > 0 && (
+        <p className="tenue" style={{ marginTop: 14, fontSize: '0.87rem' }}>
+          Por sede: {t.porSede.map((s) => `${s.code} ${s.citas}`).join(' · ')}
+          {t.noShowMesAnterior !== null && (
+            <> · no-show del mes anterior: {t.noShowMesAnterior}%</>
+          )}
+        </p>
+      )}
+
+      {t && t.citas.total === 0 && (
+        <p className="aviso">
+          No hay citas para hoy. Si la clínica sí está atendiendo, es que la agenda todavía no se
+          está usando — no que el día esté vacío.
+        </p>
+      )}
 
       <h2 style={{ marginTop: 44 }}>El ecosistema</h2>
       <p className="sub">
@@ -65,7 +116,11 @@ export default function CentroDeControl() {
           <h3 className="grupo-titulo">{grupo}</h3>
           <div className="rejilla">
             {MODULOS.filter((m) => m.grupo === grupo).map((m) => (
-              <Link key={m.id || 'inicio'} href={m.id ? `/${m.id}` : '/'} className={`ficha e-${m.estado}`}>
+              <Link
+                key={m.id || 'inicio'}
+                href={m.id ? `/${m.id}` : '/'}
+                className={`ficha e-${m.estado}`}
+              >
                 <span className="ficha-cab">
                   <Icono nombre={m.icono} tam={20} />
                   <b>{m.nombre}</b>
@@ -84,10 +139,18 @@ export default function CentroDeControl() {
   );
 }
 
-function Cifra({ valor, etiqueta }: { valor: string | number; etiqueta: string }) {
+function Cifra({
+  valor,
+  etiqueta,
+  alerta,
+}: {
+  valor: number | undefined;
+  etiqueta: string;
+  alerta?: boolean;
+}) {
   return (
-    <div className="cifra">
-      <b>{valor}</b>
+    <div className={`cifra ${alerta ? 'ojo' : ''}`}>
+      <b>{valor ?? '—'}</b>
       <span>{etiqueta}</span>
     </div>
   );

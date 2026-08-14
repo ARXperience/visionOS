@@ -1089,3 +1089,28 @@ input[type='date'] {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── alarmas del tablero ────────────────────────────── */
+.alarma {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 15px 18px;
+  border-radius: 12px;
+  background: #fdecea;
+  border: 1px solid #f5c6c2;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+.alarma a {
+  color: var(--danger);
+  font-weight: 600;
+}
+.cifra.ojo {
+  border-color: #f3e0a8;
+  background: #fffdf6;
+}
+.cifra.ojo b {
+  color: #8a6410;
+}

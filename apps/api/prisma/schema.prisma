@@ -491,6 +491,7 @@ model User {
   createdAppointments Appointment[]            @relation("CreadorDeCita")
   patientEvents       PatientEvent[]
   leads               Lead[]
+  aiPrompts           AiPrompt[]
   statusEvents        AppointmentStatusEvent[]
   bookings            ResourceBooking[]
 
@@ -1269,4 +1270,68 @@ model WaitlistEntry {
 
   @@index([siteId, serviceId, isActive, priority(sort: Desc)])
   @@map("waitlist_entries")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ASISTENTE
+// ═══════════════════════════════════════════════════════════════════
+
+/// El prompt del asistente vive en la base y se versiona.
+///
+/// No en un archivo del codigo: ajustarlo es trabajo de producto, no de
+/// despliegue, y sobre todo hace falta poder VOLVER ATRAS en un minuto
+/// cuando una version empieza a decir cosas raras a los pacientes. Un
+/// `git revert` mas un despliegue no es un minuto.
+model AiPrompt {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  /// Que hace este prompt: "atencion", "clasificacion".
+  slug        String
+  version     Int
+  /// Comportamiento: como habla, que no hace, cuando escala.
+  content     String
+  notes       String?
+  /// Solo una version activa por slug. Lo impone un indice parcial.
+  isActive    Boolean  @default(false) @map("is_active")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  createdBy User? @relation(fields: [createdById], references: [id])
+
+  @@unique([slug, version])
+  @@index([slug, isActive])
+  @@map("ai_prompts")
+}
+
+/// Una ejecucion del asistente. Es la trazabilidad: que se le pregunto, que
+/// modelo respondio, que herramientas uso, cuanto costo y si se envio o se
+/// escalo. Sin esto, "el bot dijo algo raro" no se puede investigar.
+model AiRun {
+  id             String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversationId String? @map("conversation_id") @db.Uuid
+  personId       String? @map("person_id") @db.Uuid
+  promptId       String? @map("prompt_id") @db.Uuid
+
+  provider String
+  model    String
+  entrada  String
+  salida   String?
+  /// Herramientas invocadas, en orden, con sus argumentos.
+  tools    Json    @default("[]")
+
+  /// Por que no se envio: sintoma detectado, consejo clinico bloqueado,
+  /// presupuesto agotado, error del proveedor.
+  escaladoMotivo String? @map("escalado_motivo")
+  enviado        Boolean @default(false)
+
+  tokensEntrada Int?     @map("tokens_entrada")
+  tokensSalida  Int?     @map("tokens_salida")
+  costoUsd      Decimal? @map("costo_usd") @db.Decimal(10, 6)
+  duracionMs    Int?     @map("duracion_ms")
+  error         String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt])
+  @@map("ai_runs")
 }

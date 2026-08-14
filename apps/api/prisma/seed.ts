@@ -19,6 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { sembrarDemo } from './demo';
+import { PROMPT_ATENCION } from './prompt-inicial';
 import { festivosDe } from '../src/common/utils/festivos.util';
 import { HashUtil } from '../src/common/utils/hash.util';
 
@@ -179,6 +180,23 @@ async function main(): Promise<void> {
       console.log(`contraseña:   ${password}`);
       console.log('Cámbiela al primer ingreso. No se vuelve a mostrar.');
     }
+  }
+
+  // ── Prompt del asistente ──────────────────────────────────────────
+  const yaHayPrompt = await prisma.aiPrompt.findFirst({ where: { slug: 'atencion' } });
+  if (yaHayPrompt) {
+    console.log('prompt del asistente: ya existe, no se toca');
+  } else {
+    await prisma.aiPrompt.create({
+      data: {
+        slug: 'atencion',
+        version: 1,
+        content: PROMPT_ATENCION,
+        notes: 'Versión inicial sembrada. Se ajusta desde el panel, no editando el archivo.',
+        isActive: true,
+      },
+    });
+    console.log('prompt del asistente: v1 activa');
   }
 
   if (process.env.SEED_DEMO === '1') {

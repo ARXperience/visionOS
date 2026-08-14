@@ -141,9 +141,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Asistente de la clínica',
     grupo: 'Inteligencia',
     icono: 'chispa',
-    estado: 'planeado',
+    estado: 'construccion',
     resumen:
-      'Atiende WhatsApp con cinco herramientas y ni una más: buscar servicio, consultar disponibilidad, agendar, reagendar y escalar a humano.',
+      'Cinco herramientas y ni una más, con guardarraíl que escala ante cualquier síntoma. Construido y probado, pero sin clave de proveedor no ha respondido nunca a un paciente.',
     entrega: 'E5',
     permiso: 'ai.toggle',
   },
@@ -152,9 +152,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Entrenamiento del asistente',
     grupo: 'Inteligencia',
     icono: 'libro',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Comportamiento, conocimiento y reglas, en tres capas separadas. El prompt vive en la base y se versiona, para poder revertirlo.',
+      'El prompt vive en la base y se versiona: publicar una version nueva y volver atras son un clic. Una publicada no se edita nunca.',
     entrega: 'E5',
     permiso: 'ai.configure',
   },

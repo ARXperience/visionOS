@@ -44,7 +44,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Inbox y WhatsApp',
     grupo: 'Operación',
     icono: 'chat',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
       'Todas las conversaciones en una bandeja: paciente, sede, responsable y estado. Responder, transferir, dejar notas y pausar la IA.',
     entrega: 'E2',
@@ -290,6 +290,16 @@ export const MODULOS: Modulo[] = [
   },
 
   // ── Sistema ───────────────────────────────────────────────────────
+  {
+    id: 'canales',
+    nombre: 'Líneas de WhatsApp',
+    grupo: 'Sistema',
+    icono: 'chat',
+    estado: 'disponible',
+    resumen: 'Vincular el número por QR y vigilar el estado de la sesión.',
+    entrega: 'E2',
+    permiso: 'whatsapp.manage',
+  },
   {
     id: 'usuarios',
     nombre: 'Usuarios y permisos',

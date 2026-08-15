@@ -1,5 +1,7 @@
 import { PrismaClient } from '@prisma/client';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { join } from 'node:path';
 
 import { claveDesdeEntorno } from './cifrado.js';
 import { Sesion } from './sesion.js';
@@ -16,6 +18,17 @@ import { guardarEntrante } from './entrada.js';
  * Su superficie es mínima a propósito: escucha en localhost, no en la red, y
  * Caddy nunca lo expone. Quien manda mensajes es la API.
  */
+// En produccion las variables vienen del entorno del proceso. En local se
+// leen del .env de la API: la clave de cifrado tiene que ser LA MISMA que
+// usa la API, y tenerla duplicada en dos archivos es tenerla mal en uno.
+const env = join(import.meta.dirname, '..', '..', 'api', '.env');
+if (existsSync(env) && !process.env.DATABASE_URL) {
+  for (const linea of readFileSync(env, 'utf8').split(/\r?\n/)) {
+    const m = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/i.exec(linea);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].trim();
+  }
+}
+
 const prisma = new PrismaClient();
 const clave = claveDesdeEntorno();
 const sesiones = new Map<string, Sesion>();

@@ -149,7 +149,7 @@ async function main(): Promise<void> {
   }
   console.log(`${festivos.length} festivos (${anio}–${anio + 2})`);
 
-  const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@visioncolombia.com.co';
+  const email = process.env.SEED_ADMIN_EMAIL ?? 'admin@centrodigitaldediseno.com';
   const existente = await prisma.user.findUnique({ where: { email } });
 
   if (existente) {

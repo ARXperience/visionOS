@@ -41,14 +41,25 @@ export class AuthController {
   }
 
   private opcionesCookie(maxAge?: number): CookieOptions {
+    // Con el panel en Vercel y la API en Hostinger son dos ORÍGENES
+    // distintos. La cookie solo sobrevive si ambos cuelgan del mismo dominio
+    // registrable —visioncolombia.com.co y api.visioncolombia.com.co— y se
+    // emite para el dominio padre. Si algún día el panel quedara en un
+    // dominio ajeno (un *.vercel.app suelto), esta cookie deja de llegar y
+    // habría que volver a un solo origen o pasar el refresh por cabecera,
+    // que es peor.
+    const dominio = process.env.COOKIE_DOMAIN;
+
     return {
       httpOnly: true,
       // Lax y no Strict: con Strict, llegar desde un enlace externo al panel
       // no manda la cookie y el usuario ve un login que no esperaba.
+      // Entre subdominios del mismo sitio, Lax sí viaja.
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
       // Solo se envía a la ruta que la necesita.
       path: '/api/auth',
+      ...(dominio ? { domain: dominio } : {}),
       ...(maxAge === undefined ? {} : { maxAge }),
     };
   }

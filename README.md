@@ -14,18 +14,22 @@ el inbox de WhatsApp (E2).
 
 ## Levantar en local
 
-Hace falta Docker (para Postgres y Redis) y Node ≥ 20.
+Hace falta Node ≥ 20 y un Postgres 16 alcanzable — sirve el mismo proyecto de
+Supabase, o uno local.
 
 ```bash
-cp .env.example .env          # y editar DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET
 npm install
-docker compose up -d postgres redis
+cp .env.example .env      # y poner DATABASE_URL, DIRECT_DATABASE_URL y los dos JWT
 npm run migrate:dev --workspace apps/api
-npm run dev                   # api en :3001, web en :3000
-curl http://localhost:3001/api/health
+SEED_DEMO=1 npm run seed --workspace apps/api
+npm run dev               # api en :3001, web en :3000
+node scripts/dev-proxy.mjs   # todo junto en :8777, como en producción
 ```
 
-Sin Docker sirve cualquier Postgres 16 alcanzable: basta apuntar `DATABASE_URL`.
+- Sitio público: <http://localhost:8777/>
+- VISION OS: <http://localhost:8777/admin>
+- Salud: <http://localhost:8777/api/health>
+
 Las extensiones (`btree_gist`, `pg_trgm`, `unaccent`, `uuid-ossp`) las crea la
 migración inicial, así que el rol debe poder ejecutar `CREATE EXTENSION`.
 
@@ -71,31 +75,19 @@ workflow de deploy lo comprueba solo y falla si no coincide.
 
 ## Producción
 
-Un VPS con Docker Compose: `caddy` (TLS automático) + `api` + `web` + `postgres:16`
-+ `redis:7`. Baileys necesita un proceso vivo con estado en disco, así que nada
-serverless.
+Frontend en **Vercel**, API en **Hostinger**, Postgres en **Supabase**, y el
+gateway de WhatsApp en un proceso permanente aparte.
 
-### Puesta a punto del servidor, una sola vez
+Los pasos completos, incluidas las dos cadenas de conexión de Supabase y por
+qué el gateway no puede ir en Hostinger, están en `docs/DESPLIEGUE.md`.
 
-1. VPS con Docker y Docker Compose.
-2. DNS: `os.visioncolombia.com.co` apuntando a su IP.
-3. `git clone` del repo en `/srv/vision-os`.
-4. `.env` en `/srv/vision-os` con: `POSTGRES_*`, `JWT_SECRET`,
-   `JWT_REFRESH_SECRET`, `DOMAIN`, `PUBLIC_URL`, `CORS_ORIGINS`, `GHCR_OWNER`.
-5. Secretos en GitHub → *Settings → Secrets → Actions*:
-   `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, `PUBLIC_URL`.
+### Verificar que un despliegue entró
 
-A partir de ahí, cada push a `main` construye las imágenes, las sube a `ghcr.io`,
-las despliega por SSH y verifica el SHA. Revertir es cambiar `TAG` a un commit
-anterior y `docker compose up -d`.
+```bash
+curl -s https://api.visioncolombia.com.co/api/health | jq .sha
+```
 
-### Copias de seguridad
-
-`pg_dump` diario cifrado con `age` a Backblaze B2, 30 días de retención, más
-snapshot del volumen. **Restauración de prueba mensual agendada**: el backup que
-nunca se restauró no es un backup, y aquí hay datos de salud.
-
----
+Ese valor debe ser el commit que se acaba de subir.
 
 ## Estructura
 

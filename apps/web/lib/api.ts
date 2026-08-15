@@ -7,9 +7,15 @@
  * navegador manda solo y el JavaScript no puede tocar. Al cargar, `recuperar()`
  * la canjea por un access token nuevo.
  *
- * Todo va al mismo origen (`/api/...`), así que no hay CORS ni configuración
- * de dominio que mantener.
+ * La base de la API es configurable. En local todo sale del mismo origen
+ * (`/api/...`) gracias al proxy; en producción el panel vive en Vercel y la
+ * API en Hostinger, así que hay que apuntar al dominio completo.
+ *
+ * `credentials: 'include'` y no 'same-origin': la cookie del refresh tiene
+ * que viajar a otro subdominio. Para que llegue, la API la emite con
+ * `domain=.visioncolombia.com.co` y ambos cuelgan de ahí.
  */
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 export interface Sesion {
   id: string;
   email: string;
@@ -33,15 +39,16 @@ export class ApiError extends Error {
 }
 
 async function pedir<T>(ruta: string, init: RequestInit = {}, reintentar = true): Promise<T> {
-  const res = await fetch(`/api${ruta}`, {
+  const res = await fetch(`${BASE}${ruta}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
       ...init.headers,
     },
-    // Sin esto la cookie del refresh no viaja.
-    credentials: 'same-origin',
+    // Sin esto la cookie del refresh no viaja. 'include' y no 'same-origin'
+    // porque la API está en otro subdominio.
+    credentials: 'include',
   });
 
   // Un 401 con sesión previa suele ser el access token vencido (15 min), no

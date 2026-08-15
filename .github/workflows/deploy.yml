@@ -9,80 +9,109 @@ concurrency:
   group: deploy-produccion
   cancel-in-progress: false
 
-env:
-  REGISTRY: ghcr.io
-
 jobs:
-  imagenes:
+  # ── API → Hostinger ──────────────────────────────────────────────
+  #
+  # Hostinger no compila TypeScript: despliega lo que encuentra en la rama.
+  # La solución obvia —commitear `dist/` en main— es la que tiene el ERP de
+  # Servimil y produce diffs ilegibles, conflictos en cada merge y la duda
+  # permanente de si lo que corre es lo que dice el código.
+  #
+  # Aquí `main` queda limpia y el build va a una rama aparte, `deploy-api`,
+  # que Hostinger es quien lee. Nadie trabaja en esa rama: se reescribe
+  # entera en cada despliegue.
+  api:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        app: [api, web]
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
+      - uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: 22
+          cache: npm
 
-      # El SHA se hornea en la imagen: es lo que /health devuelve y lo que
-      # permite comprobar que el despliegue entro sin abrir ningun panel.
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: apps/${{ matrix.app }}/Dockerfile
-          push: true
-          build-args: GIT_SHA=${{ github.sha }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/vision-os-${{ matrix.app }}:${{ github.sha }}
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/vision-os-${{ matrix.app }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - run: npm ci --no-audit --no-fund
 
-  servidor:
-    needs: imagenes
+      - name: Compilar API y cliente de Prisma
+        run: |
+          npm run prisma:generate --workspace apps/api
+          npm run build --workspace apps/api
+        env:
+          # Prisma solo necesita una URL bien formada para generar el cliente.
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+          DIRECT_DATABASE_URL: postgresql://build:build@localhost:5432/build
+
+      - name: Armar la rama de despliegue
+        run: |
+          set -e
+          rm -rf /tmp/deploy && mkdir -p /tmp/deploy
+          cp -r apps/api/dist /tmp/deploy/dist
+          cp -r apps/api/prisma /tmp/deploy/prisma
+          cp apps/api/package.json /tmp/deploy/package.json
+          cp package-lock.json /tmp/deploy/package-lock.json
+
+          # El SHA se hornea aquí: es lo que /health devuelve y lo que
+          # permite comprobar que el despliegue entró de verdad.
+          echo "GIT_SHA=${{ github.sha }}" > /tmp/deploy/.sha
+
+          # Hostinger arranca con `npm start`. La migración corre ANTES: si
+          # falla, el proceso no levanta y la versión vieja sigue en pie, que
+          # es preferible a una API nueva contra un esquema viejo.
+          node -e "
+            const p = require('/tmp/deploy/package.json');
+            p.scripts = {
+              start: 'npx prisma migrate deploy && node dist/main',
+              postinstall: 'npx prisma generate',
+            };
+            delete p.devDependencies;
+            require('fs').writeFileSync('/tmp/deploy/package.json', JSON.stringify(p, null, 2));
+          "
+
+          cd /tmp/deploy
+          git init -q
+          git config user.name  "github-actions"
+          git config user.email "github-actions@github.com"
+          git add -A
+          git commit -q -m "build ${{ github.sha }}"
+          git push -q --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            HEAD:refs/heads/deploy-api
+
+      - name: Recordatorio
+        run: |
+          echo "Rama deploy-api actualizada con ${{ github.sha }}."
+          echo "Hostinger despliega desde esa rama, no desde main."
+
+  # ── Frontend → Vercel ────────────────────────────────────────────
+  #
+  # No hay job: Vercel despliega solo desde su integración con GitHub. Se
+  # deja escrito para que nadie busque el paso que falta.
+  web:
     runs-on: ubuntu-latest
     steps:
-      - name: Desplegar por SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            cd /srv/vision-os
-            git pull --ff-only
-            export TAG=${{ github.sha }}
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            docker compose pull api web
-            # migrate deploy va en el command del contenedor api
-            docker compose up -d
-            docker image prune -f
+      - run: echo "El frontend lo despliega Vercel desde su propia integración con el repositorio."
 
+  # ── Comprobación ─────────────────────────────────────────────────
   verificar:
-    needs: servidor
+    needs: api
     runs-on: ubuntu-latest
+    if: ${{ vars.PUBLIC_API_URL != '' }}
     steps:
-      # El criterio de E0: el SHA que responde /health es el que se acaba de
-      # subir. "El panel dice completado" no cuenta como verificacion.
+      # "El panel dice completado" no es una verificación. Lo es que el SHA
+      # que responde /health sea el commit que se acaba de subir.
       - name: /health devuelve el SHA de este commit
         run: |
           for intento in $(seq 1 20); do
-            sha=$(curl -sf "${{ secrets.PUBLIC_URL }}/api/health" | grep -o '"sha":"[^"]*"' | cut -d'"' -f4 || true)
+            sha=$(curl -sf "${{ vars.PUBLIC_API_URL }}/api/health" \
+              | grep -o '"sha":"[^"]*"' | cut -d'"' -f4 || true)
             if [ "$sha" = "${{ github.sha }}" ]; then
               echo "Desplegado: $sha"
               exit 0
             fi
             echo "intento $intento — responde '$sha', se espera '${{ github.sha }}'"
-            sleep 15
+            sleep 20
           done
-          echo "::error::El despliegue no entro: /health sigue en otro commit."
+          echo "::error::El despliegue no entró: /health sigue en otro commit."
           exit 1

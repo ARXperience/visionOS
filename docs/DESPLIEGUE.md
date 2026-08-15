@@ -21,8 +21,17 @@ clínicas detrás, eso no es una opción.
 
 ## 1. Supabase
 
-1. Proyecto nuevo, región **us-east-1**.
-2. *Settings → Database* y copiar **las dos** cadenas:
+> **La conexión directa `db.<ref>.supabase.co` solo resuelve por IPv6.**
+> Si la red desde donde se conecta no tiene salida IPv6 —la mayoría de
+> conexiones domésticas y muchos hostings en Colombia—, el puerto 5432 no
+> responde y Prisma dice «Can't reach database server» aunque el DNS
+> resuelva. Hay que usar el **pooler**, que sí es IPv4:
+> `aws-0-<región>.pooler.supabase.com`, con usuario `postgres.<ref>`.
+>
+> La región del proyecto de Visión Colombia es **us-east-2**, no us-east-1.
+
+1. Proyecto en Supabase.
+2. *Settings → Database* y copiar **las dos** cadenas del pooler:
    - **Transaction pooler**, puerto `6543` → `DATABASE_URL`.
      Añadirle `?pgbouncer=true` — sin eso Prisma usa sentencias preparadas
      que pgbouncer en modo transacción rechaza, y falla de forma

@@ -222,10 +222,19 @@ export default function Examenes() {
                           type="button"
                           onClick={() =>
                             void api
-                              .get<{ fileUrl: string; fileName: string; sha256: string }>(
+                              // El servidor firma el enlace al entregar el
+                              // resultado: dura cinco minutos y la lectura ya
+                              // quedó en auditoría antes de que se abra.
+                              .get<{ enlace: string | null; fileName: string }>(
                                 `/ordenes/resultados/${o.results[0].id}`,
                               )
-                              .then((r) => window.open(r.fileUrl, '_blank'))
+                              .then((r) =>
+                                r.enlace
+                                  ? window.open(r.enlace, '_blank')
+                                  : setError(
+                                      'El archivo no está disponible: falta configurar el almacenamiento.',
+                                    ),
+                              )
                               .catch((x: Error) => setError(x.message))
                           }
                         >
@@ -281,8 +290,8 @@ function SubirResultado({
   const [error, setError] = useState<string | null>(null);
   const [archivo, setArchivo] = useState<File | null>(null);
   const [sha, setSha] = useState<string | null>(null);
-  const [url, setUrl] = useState('');
   const [isFinal, setIsFinal] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
 
   /**
    * El hash se calcula en el navegador con la API del propio navegador. Así
@@ -298,30 +307,68 @@ function SubirResultado({
     );
   }
 
+  /**
+   * El archivo va del navegador al almacenamiento con una URL prefirmada, sin
+   * pasar por la API: una tomografía de 40 MB atravesando Nest es memoria del
+   * contenedor y el doble de tiempo de subida, para nada.
+   */
+  async function adjuntar() {
+    if (!archivo || !sha) return;
+    setSubiendo(true);
+    setError(null);
+    try {
+      const firma = await api.post<{ url: string; key: string }>('/archivos/firmar-subida', {
+        nombre: archivo.name,
+        tipo: archivo.type || 'application/pdf',
+        bytes: archivo.size,
+        destino: 'resultados',
+      });
+
+      const r = await fetch(firma.url, {
+        method: 'PUT',
+        body: archivo,
+        headers: { 'content-type': archivo.type || 'application/pdf' },
+      });
+      if (!r.ok) throw new Error(`El almacenamiento rechazó el archivo (${r.status}).`);
+
+      // Solo después de que el archivo existe se crea la fila: al revés, un
+      // fallo de red dejaría un resultado en la ficha apuntando a nada.
+      await api.post(`/ordenes/${orden.id}/resultado`, {
+        fileUrl: firma.key,
+        fileName: archivo.name,
+        mimeType: archivo.type || 'application/octet-stream',
+        sizeBytes: archivo.size,
+        sha256: sha,
+        isFinal,
+      });
+      alSubir();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSubiendo(false);
+    }
+  }
+
   return (
     <div className="panel-agendar">
       <h2 style={{ fontSize: '1.05rem' }}>
         Resultado de {orden.service.name} — {orden.person.displayName}
       </h2>
 
-      <p className="aviso" style={{ marginTop: 12 }}>
-        <b>El archivo aún no se sube desde aquí.</b> Falta configurar el almacenamiento (Supabase
-        Storage). Por ahora suba el PDF donde lo guarde la clínica y pegue el enlace: el sistema
-        registra su hash, su tamaño y quién lo adjuntó, que es lo que permite auditarlo.
+      <p className="tenue" style={{ marginTop: 12, fontSize: '0.82rem' }}>
+        El archivo se sube cifrado a un bucket privado. No queda ningún enlace público: cada vez que
+        alguien lo abre se firma un enlace de cinco minutos y la lectura queda en auditoría.
       </p>
 
       <div className="rejilla-form" style={{ marginTop: 14 }}>
         <label>
-          Archivo (para calcular el hash)
+          Archivo del informe (PDF, imagen o DICOM, máximo 50 MB)
           <input
             type="file"
+            accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff,.dcm,application/pdf,image/*,application/dicom"
             onChange={(e) => e.target.files?.[0] && void elegir(e.target.files[0])}
             style={{ fontWeight: 400 }}
           />
-        </label>
-        <label>
-          Enlace al archivo
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
         </label>
       </div>
 
@@ -342,22 +389,10 @@ function SubirResultado({
         <button
           className="btn-mini"
           type="button"
-          disabled={!archivo || !sha || !url}
-          onClick={() =>
-            void api
-              .post(`/ordenes/${orden.id}/resultado`, {
-                fileUrl: url,
-                fileName: archivo!.name,
-                mimeType: archivo!.type || 'application/octet-stream',
-                sizeBytes: archivo!.size,
-                sha256: sha,
-                isFinal,
-              })
-              .then(alSubir)
-              .catch((e: Error) => setError(e.message))
-          }
+          disabled={!archivo || !sha || subiendo}
+          onClick={() => void adjuntar()}
         >
-          Adjuntar
+          {subiendo ? 'Subiendo…' : 'Adjuntar'}
         </button>
         <button className="btn-mini" type="button" onClick={alCerrar}>
           Cancelar

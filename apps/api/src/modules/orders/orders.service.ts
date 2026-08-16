@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { StorageService } from '../storage/storage.service';
 import { TimelineService } from '../timeline/timeline.service';
 
 interface Ctx {
@@ -25,6 +26,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly timeline: TimelineService,
+    private readonly storage: StorageService,
   ) {}
 
   async crear(
@@ -288,7 +290,17 @@ export class OrdersService {
       ipAddress: ctx.ip,
     });
 
-    return r;
+    // El enlace se firma aquí y no en un endpoint genérico por clave: así el
+    // servidor comprueba a qué paciente pertenece el archivo antes de
+    // entregarlo, y la auditoría queda atada al resultado. Un endpoint que
+    // firmara cualquier clave dejaría bajar el examen de cualquiera a quien
+    // supiera —o adivinara— la ruta. Dura cinco minutos y no se guarda.
+    const enlace =
+      r.fileUrl && this.storage.habilitado
+        ? (await this.storage.firmarDescarga(r.fileUrl, r.fileName)).url
+        : null;
+
+    return { ...r, enlace };
   }
 
   async anular(id: string, motivo: string, ctx: Ctx) {

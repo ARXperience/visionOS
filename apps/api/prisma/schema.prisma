@@ -167,6 +167,21 @@ enum ServiceOrderStatus {
   VENCIDA
 }
 
+enum PqrsfTipo {
+  PETICION
+  QUEJA
+  RECLAMO
+  SUGERENCIA
+  FELICITACION
+}
+
+enum PqrsfEstado {
+  RADICADA
+  EN_GESTION
+  RESPONDIDA
+  CERRADA
+}
+
 enum LeadStatus {
   NUEVO
   CONTACTADO
@@ -360,6 +375,7 @@ model Site {
   appointments   Appointment[]
   bookings       ResourceBooking[]
   events         PatientEvent[]
+  pqrsf          Pqrsf[]
   leads          Lead[]
   waitlist       WaitlistEntry[]
 
@@ -461,6 +477,7 @@ model Service {
   leads         Lead[]
   waitlist      WaitlistEntry[]
   orders        ServiceOrder[]
+  pqrsf         Pqrsf[]
 
   @@index([businessLine, isActive])
   @@map("services")
@@ -517,6 +534,8 @@ model User {
   aiPrompts           AiPrompt[]
   serviceOrders       ServiceOrder[]
   resultsUploaded     ServiceResult[]          @relation("SubidoPor")
+  pqrsfAsignadas      Pqrsf[]                  @relation("PqrsfAsignada")
+  pqrsfRadicadas      Pqrsf[]                  @relation("PqrsfRadicada")
   statusEvents        AppointmentStatusEvent[]
   bookings            ResourceBooking[]
 
@@ -666,6 +685,7 @@ model Person {
   waitlistEntries WaitlistEntry[]
   auditoria       AuditLog[]      @relation("AuditoriaSobre")
   serviceOrders   ServiceOrder[]
+  pqrsf           Pqrsf[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -780,8 +800,8 @@ model Professional {
   sites          ProfessionalSite[]
   availabilities ProfessionalAvailability[]
   services       ServiceProfessional[]
-  orderedOrders  ServiceOrder[]            @relation("OrdenadaPor")
-  results        ServiceResult[]           @relation("RealizadoPor")
+  orderedOrders  ServiceOrder[]             @relation("OrdenadaPor")
+  results        ServiceResult[]            @relation("RealizadoPor")
   bookings       ResourceBooking[]
 
   @@unique([docType, docNumber])
@@ -1473,4 +1493,56 @@ model ServiceResult {
   @@index([serviceOrderId])
   @@index([appointmentId])
   @@map("service_results")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PQRSF
+// ═══════════════════════════════════════════════════════════════════
+
+/// Peticion, queja, reclamo, sugerencia o felicitacion.
+///
+/// Cuelga de Person y no de una tabla suelta a proposito: una queja
+/// desconectada del resto de la relacion con la clinica es una queja que
+/// nadie relaciona con las tres citas canceladas que la provocaron.
+model Pqrsf {
+  id       String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  /// Numero de radicado que se le da al paciente. Consecutivo por ano.
+  radicado String      @unique
+  tipo     PqrsfTipo
+  estado   PqrsfEstado @default(RADICADA)
+
+  personId  String? @map("person_id") @db.Uuid
+  /// Puede radicar alguien que no es paciente: un acompanante, un familiar.
+  nombre    String?
+  contacto  String?
+  siteId    String? @map("site_id") @db.Uuid
+  serviceId String? @map("service_id") @db.Uuid
+
+  asunto  String
+  detalle String
+
+  /// Plazo legal. Se calcula en dias HABILES descontando festivos: contar
+  /// corridos da una fecha que la clinica cree cumplir y no cumple.
+  dueDate      DateTime  @map("due_date") @db.Date
+  assignedToId String?   @map("assigned_to_id") @db.Uuid
+  respuesta    String?
+  respondedAt  DateTime? @map("responded_at") @db.Timestamptz(3)
+  closedAt     DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  /// 1 a 5, preguntado despues de cerrar.
+  satisfaccion Int? @db.SmallInt
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person     Person?  @relation(fields: [personId], references: [id])
+  site       Site?    @relation(fields: [siteId], references: [id])
+  service    Service? @relation(fields: [serviceId], references: [id])
+  assignedTo User?    @relation("PqrsfAsignada", fields: [assignedToId], references: [id])
+  createdBy  User?    @relation("PqrsfRadicada", fields: [createdById], references: [id])
+
+  @@index([estado, dueDate])
+  @@index([personId])
+  @@map("pqrsf")
 }

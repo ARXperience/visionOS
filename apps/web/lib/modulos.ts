@@ -132,9 +132,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'PQRSF y experiencia',
     grupo: 'Pacientes',
     icono: 'buzon',
-    estado: 'planeado',
-    resumen: 'Radicación, responsable, SLA y resolución, colgando de la misma ficha del paciente.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Radicado consecutivo, responsable y plazo legal en días hábiles descontando festivos, con el indicador de cumplimiento.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
 
   // ── Inteligencia artificial ───────────────────────────────────────

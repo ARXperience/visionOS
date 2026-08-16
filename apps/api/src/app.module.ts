@@ -21,6 +21,7 @@ import { TimelineModule } from './modules/timeline/timeline.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
 import { ProfessionalsModule } from './modules/professionals/professionals.module';
 import { UsersModule } from './modules/users/users.module';
+import { PqrsfModule } from './modules/pqrsf/pqrsf.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -51,6 +52,7 @@ import { PrismaModule } from './prisma/prisma.module';
     UsersModule,
     ProfessionalsModule,
     OrdersModule,
+    PqrsfModule,
   ],
   controllers: [HealthController],
   providers: [

@@ -317,7 +317,7 @@ export const MODULOS: Modulo[] = [
     nombre: 'Auditoría',
     grupo: 'Sistema',
     icono: 'lupa',
-    estado: 'construccion',
+    estado: 'disponible',
     resumen:
       'Quién consultó, creó, modificó o exportó. Ya se registra —incluidas las lecturas de ficha— y la base impide alterarlo.',
     entrega: 'E1',

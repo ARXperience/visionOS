@@ -548,8 +548,7 @@ model AuditLog {
   entityId   String?     @map("entity_id") @db.Uuid
 
   /// Desnormalizado a proposito: permite responder "quien consulto a este
-  /// paciente" en una consulta, que es lo que pide una auditoria.
-  /// Sin FK todavia: el modelo Person entra en E1.
+  /// paciente" en UNA consulta, que es justo lo que pide una auditoria.
   personId String? @map("person_id") @db.Uuid
   siteId   String? @map("site_id") @db.Uuid
 
@@ -563,6 +562,9 @@ model AuditLog {
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   user User? @relation(fields: [userId], references: [id])
+  /// La persona nunca se borra fisicamente —el trigger de consentimientos lo
+  /// impide—, asi que la clave foranea no puede dejar huerfano un registro.
+  person Person? @relation("AuditoriaSobre", fields: [personId], references: [id])
 
   @@index([personId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -646,6 +648,7 @@ model Person {
   events          PatientEvent[]
   leads           Lead[]
   waitlistEntries WaitlistEntry[]
+  auditoria       AuditLog[]      @relation("AuditoriaSobre")
 
   @@unique([docType, docNumber])
   @@index([displayName])

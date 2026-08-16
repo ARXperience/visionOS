@@ -150,9 +150,21 @@ enum PatientEventType {
   CHECKIN
   ATENDIDO
   NO_ASISTIO
+  ORDEN_GENERADA
+  RESULTADO_CARGADO
   CONSENTIMIENTO_OTORGADO
   CONSENTIMIENTO_REVOCADO
   NOTA_MANUAL
+}
+
+enum ServiceOrderStatus {
+  PENDIENTE
+  AUTORIZADA
+  AGENDADA
+  REALIZADA
+  INFORMADA
+  ANULADA
+  VENCIDA
 }
 
 enum LeadStatus {
@@ -395,6 +407,7 @@ model Equipment {
 
   site     Site              @relation(fields: [siteId], references: [id])
   bookings ResourceBooking[]
+  results  ServiceResult[]
 
   @@unique([siteId, code])
   @@index([siteId, modality, isActive])
@@ -447,6 +460,7 @@ model Service {
   appointments  Appointment[]
   leads         Lead[]
   waitlist      WaitlistEntry[]
+  orders        ServiceOrder[]
 
   @@index([businessLine, isActive])
   @@map("services")
@@ -482,8 +496,8 @@ model User {
   /// JWT compara el `iat` del token contra esta marca y rechaza los
   /// anteriores.
   passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(3)
-  mfaEnabled  Boolean   @default(false) @map("mfa_enabled")
-  mfaSecret   String?   @map("mfa_secret")
+  mfaEnabled        Boolean   @default(false) @map("mfa_enabled")
+  mfaSecret         String?   @map("mfa_secret")
 
   metadata  Json      @default("{}")
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -501,6 +515,8 @@ model User {
   patientEvents       PatientEvent[]
   leads               Lead[]
   aiPrompts           AiPrompt[]
+  serviceOrders       ServiceOrder[]
+  resultsUploaded     ServiceResult[]          @relation("SubidoPor")
   statusEvents        AppointmentStatusEvent[]
   bookings            ResourceBooking[]
 
@@ -561,7 +577,7 @@ model AuditLog {
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  user User? @relation(fields: [userId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
   /// La persona nunca se borra fisicamente —el trigger de consentimientos lo
   /// impide—, asi que la clave foranea no puede dejar huerfano un registro.
   person Person? @relation("AuditoriaSobre", fields: [personId], references: [id])
@@ -649,6 +665,7 @@ model Person {
   leads           Lead[]
   waitlistEntries WaitlistEntry[]
   auditoria       AuditLog[]      @relation("AuditoriaSobre")
+  serviceOrders   ServiceOrder[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -763,6 +780,8 @@ model Professional {
   sites          ProfessionalSite[]
   availabilities ProfessionalAvailability[]
   services       ServiceProfessional[]
+  orderedOrders  ServiceOrder[]            @relation("OrdenadaPor")
+  results        ServiceResult[]           @relation("RealizadoPor")
   bookings       ResourceBooking[]
 
   @@unique([docType, docNumber])
@@ -1030,6 +1049,7 @@ model Appointment {
   createdVia     ChannelProvider @default(PRESENCIAL) @map("created_via")
   createdById    String?         @map("created_by_id") @db.Uuid
   conversationId String?         @map("conversation_id") @db.Uuid
+  serviceOrderId String?         @map("service_order_id") @db.Uuid
 
   // Marcas desnormalizadas del recorrido. La verdad esta en
   // AppointmentStatusEvent; esto existe para que el tablero del dia sea una
@@ -1056,6 +1076,7 @@ model Appointment {
   coverage     Coverage?     @relation(fields: [coverageId], references: [id])
   createdBy    User?         @relation("CreadorDeCita", fields: [createdById], references: [id])
   conversation Conversation? @relation(fields: [conversationId], references: [id])
+  serviceOrder ServiceOrder? @relation("OrdenAgendada", fields: [serviceOrderId], references: [id])
 
   rescheduledFrom Appointment? @relation("Reagenda", fields: [rescheduledFromId], references: [id])
   rescheduledTo   Appointment? @relation("Reagenda")
@@ -1064,6 +1085,8 @@ model Appointment {
   statusEvents  AppointmentStatusEvent[]
   notifications AppointmentNotification[]
   waitlistFills WaitlistEntry[]           @relation("CupoOcupado")
+  ordersCreated ServiceOrder[]            @relation("OrigenDeOrden")
+  results       ServiceResult[]
 
   @@index([siteId, startsAt])
   @@index([siteId, status, startsAt])
@@ -1346,4 +1369,108 @@ model AiRun {
   @@index([conversationId, createdAt])
   @@index([createdAt])
   @@map("ai_runs")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ORDENES Y RESULTADOS
+//
+// ⚠ Esto NO es historia clinica, y la linea es fina a proposito:
+//
+//   - Una ORDEN dice que a alguien le mandaron un examen. Es
+//     administrativo: sirve para agendarlo y para saber quien se quedo a
+//     mitad de camino.
+//   - Un RESULTADO se guarda como ARCHIVO con sus metadatos. Guardar el
+//     PDF que produjo el equipo no convierte a la clinica en custodio de
+//     una historia clinica.
+//
+//   `reportText` es la excepcion y hay que tratarla como tal: un informe
+//   transcrito por un profesional de la clinica SI es historia clinica
+//   bajo la Res. 1995/1999 —conservacion de 15 anos, prohibicion de
+//   borrado, registro de accesos—. El esquema lo soporta (sin DELETE,
+//   con sha256, con auditoria de lectura), pero si el equipo no va a
+//   operar bajo esas reglas, ese campo debe quedarse vacio.
+// ═══════════════════════════════════════════════════════════════════
+
+/// "Al paciente le mandaron un OCT". Vive aunque nadie la agende, y ahi
+/// esta su valor: la lista de ordenes sin agendar es la de pacientes que
+/// se quedaron a medio camino. Sin ella, un examen ordenado y nunca hecho
+/// no aparece en ningun sitio.
+model ServiceOrder {
+  id         String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId   String             @map("person_id") @db.Uuid
+  serviceId  String             @map("service_id") @db.Uuid
+  status     ServiceOrderStatus @default(PENDIENTE)
+  laterality Laterality         @default(NA)
+
+  /// La consulta donde se genero la orden.
+  originAppointmentId     String? @map("origin_appointment_id") @db.Uuid
+  orderedByProfessionalId String? @map("ordered_by_professional_id") @db.Uuid
+
+  /// Orden de otra IPS: solo el archivo escaneado.
+  externalOrderUrl    String?   @map("external_order_url")
+  authorizationNumber String?   @map("authorization_number")
+  authorizedAt        DateTime? @map("authorized_at") @db.Timestamptz(3)
+  /// Vencida, la EPS suele no autorizarla. Por eso se vigila.
+  dueDate             DateTime? @map("due_date") @db.Date
+
+  indications String?
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person            Person        @relation(fields: [personId], references: [id])
+  service           Service       @relation(fields: [serviceId], references: [id])
+  originAppointment Appointment?  @relation("OrigenDeOrden", fields: [originAppointmentId], references: [id])
+  orderedBy         Professional? @relation("OrdenadaPor", fields: [orderedByProfessionalId], references: [id])
+  createdBy         User?         @relation(fields: [createdById], references: [id])
+
+  scheduledAppointments Appointment[]   @relation("OrdenAgendada")
+  results               ServiceResult[]
+
+  @@index([personId, status])
+  @@index([status, dueDate])
+  @@map("service_orders")
+}
+
+/// El resultado, como archivo con metadatos. Append-only: no se edita ni
+/// se borra, se sube otra version.
+model ServiceResult {
+  id             String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  serviceOrderId String? @map("service_order_id") @db.Uuid
+  appointmentId  String? @map("appointment_id") @db.Uuid
+
+  fileUrl   String @map("file_url")
+  fileName  String @map("file_name")
+  mimeType  String @map("mime_type")
+  sizeBytes Int    @map("size_bytes")
+
+  /// Integridad del documento clinico. Barato ahora, imposible retroactivo:
+  /// sin el no hay forma de demostrar que el informe que se descarga hoy es
+  /// el mismo que se subio, y un resultado alterado es un problema clinico,
+  /// no informatico.
+  sha256 String @db.VarChar(64)
+
+  performedAt   DateTime @map("performed_at") @db.Timestamptz(3)
+  performedById String?  @map("performed_by_id") @db.Uuid
+  equipmentId   String?  @map("equipment_id") @db.Uuid
+
+  /// Preliminar o definitivo. Entregar un preliminar como definitivo es
+  /// peor que no entregar nada.
+  isFinal Boolean @default(false) @map("is_final")
+
+  /// ⚠ Si se llena, esto ya es historia clinica. Ver la nota de arriba.
+  reportText String? @map("report_text")
+
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  serviceOrder ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id])
+  performedBy  Professional? @relation("RealizadoPor", fields: [performedById], references: [id])
+  equipment    Equipment?    @relation(fields: [equipmentId], references: [id])
+  uploadedBy   User?         @relation("SubidoPor", fields: [uploadedById], references: [id])
+
+  @@index([serviceOrderId])
+  @@index([appointmentId])
+  @@map("service_results")
 }

@@ -15,6 +15,7 @@ import { CatalogModule } from './modules/catalog/catalog.module';
 import { ChannelsModule } from './modules/channels/channels.module';
 import { ConversationsModule } from './modules/conversations/conversations.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { OrdersModule } from './modules/orders/orders.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { TimelineModule } from './modules/timeline/timeline.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
@@ -49,6 +50,7 @@ import { PrismaModule } from './prisma/prisma.module';
     AiModule,
     UsersModule,
     ProfessionalsModule,
+    OrdersModule,
   ],
   controllers: [HealthController],
   providers: [

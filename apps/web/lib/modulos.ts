@@ -111,9 +111,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Exámenes diagnósticos',
     grupo: 'Pacientes',
     icono: 'escaner',
-    estado: 'planeado',
-    resumen: 'Orden → agenda → realización → resultado → entrega. OCT, campo visual, Pentacam, ecografía.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Orden → autorización → agenda → realización → resultado, con el hash del archivo para poder demostrar que no cambió.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
   {
     id: 'cirugias',

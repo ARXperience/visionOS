@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
+import { BillingModule } from './modules/billing/billing.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -41,6 +42,7 @@ import { PrismaModule } from './prisma/prisma.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuditModule,
+    BillingModule,
     TimelineModule,
     AuthModule,
     CatalogModule,

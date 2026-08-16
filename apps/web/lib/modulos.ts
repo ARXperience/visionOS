@@ -207,21 +207,23 @@ export const MODULOS: Modulo[] = [
   // ── Dinero ────────────────────────────────────────────────────────
   {
     id: 'facturacion',
-    nombre: 'Facturación',
+    nombre: 'Facturación y cartera',
     grupo: 'Dinero',
     icono: 'factura',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Cotización, factura, pago y caja. La emisión electrónica DIAN y los RIPS se delegan en un proveedor autorizado, no se construyen.',
-    entrega: null,
+      'Cuenta de cobro con sus líneas, copago, pagos y glosas. La emisión electrónica DIAN y los RIPS se delegan en un proveedor autorizado, no se construyen.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
   {
-    id: 'cartera',
-    nombre: 'Cartera y tesorería',
+    id: 'tesoreria',
+    nombre: 'Tesorería',
     grupo: 'Dinero',
     icono: 'moneda',
     estado: 'planeado',
-    resumen: 'Cartera por edad, aseguradores, glosas, recaudo diario y conciliación.',
+    resumen:
+      'Recaudo diario por sede, cierre de caja y conciliación bancaria. La cartera por edades y las glosas ya están en Facturación.',
     entrega: null,
   },
   {

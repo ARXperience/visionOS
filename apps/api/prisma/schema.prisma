@@ -382,6 +382,7 @@ model Site {
   leads          Lead[]
   waitlist       WaitlistEntry[]
   surgeries      Surgery[]
+  invoices       Invoice[]
 
   @@map("sites")
 }
@@ -483,6 +484,8 @@ model Service {
   orders        ServiceOrder[]
   pqrsf         Pqrsf[]
 
+  invoiceItems InvoiceItem[]
+
   @@index([businessLine, isActive])
   @@map("services")
 }
@@ -544,6 +547,10 @@ model User {
   bookings            ResourceBooking[]
 
   surgeriesCreated Surgery[] @relation("CirugiaCreada")
+
+  invoicesCreated  Invoice[] @relation("FacturaCreada")
+  paymentsReceived Payment[] @relation("PagoRecibido")
+  glosasCreated    Glosa[]   @relation("GlosaCreada")
 
   @@index([role, status])
   @@map("users")
@@ -695,6 +702,8 @@ model Person {
 
   surgeries Surgery[]
 
+  invoices Invoice[]
+
   @@unique([docType, docNumber])
   @@index([displayName])
   @@index([phone])
@@ -723,6 +732,7 @@ model Payer {
   coverages    Coverage[]
   prices       ServicePrice[]
   appointments Appointment[]
+  invoices     Invoice[]
 
   @@index([type, isActive])
   @@map("payers")
@@ -1119,7 +1129,8 @@ model Appointment {
   ordersCreated ServiceOrder[]            @relation("OrigenDeOrden")
   results       ServiceResult[]
 
-  surgery Surgery?
+  surgery      Surgery?
+  invoiceItems InvoiceItem[]
 
   @@index([siteId, startsAt])
   @@index([siteId, status, startsAt])
@@ -1681,4 +1692,182 @@ model SurgeryImplant {
   @@index([lot])
   @@index([serial])
   @@map("surgery_implants")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// FACTURACION INTERNA Y CARTERA
+// ═══════════════════════════════════════════════════════════════════
+
+enum InvoiceStatus {
+  BORRADOR
+  EMITIDA
+  PAGADA
+  ANULADA
+}
+
+enum PaymentMethod {
+  EFECTIVO
+  TARJETA_DEBITO
+  TARJETA_CREDITO
+  TRANSFERENCIA
+  PSE
+  BONO
+  OTRO
+}
+
+enum GlosaStatus {
+  RECIBIDA
+  RESPONDIDA
+  ACEPTADA
+  LEVANTADA
+}
+
+/// Cuenta de cobro interna.
+///
+/// NO es la factura electronica de la DIAN. Esa la emite un proveedor
+/// autorizado y sigue fuera de alcance por decision tomada al empezar. Esto
+/// es lo que la clinica necesita antes: saber cuanto se le debe, quien lo
+/// debe y desde hace cuanto.
+///
+/// El dia que entre la emision electronica, `dianCufe` y `dianStatus` se
+/// llenan y el resto del modelo no cambia.
+model Invoice {
+  id     String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  /// Consecutivo interno por ano: FV-2026-000123.
+  number String        @unique
+  status InvoiceStatus @default(BORRADOR)
+
+  personId String  @map("person_id") @db.Uuid
+  siteId   String  @map("site_id") @db.Uuid
+  /// Nulo = particular: paga el paciente de su bolsillo.
+  payerId  String? @map("payer_id") @db.Uuid
+
+  /// Todo el dinero es Decimal(14,2). Un float en pesos redondea mal y el
+  /// error solo aparece cuando la suma de las lineas no da el total.
+  subtotal Decimal @default(0) @db.Decimal(14, 2)
+  discount Decimal @default(0) @db.Decimal(14, 2)
+  /// Lo que asume el paciente aunque haya asegurador: copago o cuota
+  /// moderadora. Se guarda aparte porque se cobra en mostrador el mismo dia,
+  /// mientras el resto se le radica a la EPS y se cobra en meses.
+  copay    Decimal @default(0) @db.Decimal(14, 2)
+  total    Decimal @default(0) @db.Decimal(14, 2)
+
+  issuedAt   DateTime? @map("issued_at") @db.Timestamptz(3)
+  /// Fecha limite de pago. Sin ella la cartera no se puede clasificar por
+  /// edades, que es lo unico que hace accionable un saldo pendiente.
+  dueDate    DateTime? @map("due_date") @db.Date
+  voidedAt   DateTime? @map("voided_at") @db.Timestamptz(3)
+  voidReason String?   @map("void_reason")
+
+  /// Radicacion ante el asegurador: sin numero y fecha, la EPS dice que
+  /// nunca llego y no hay como probar lo contrario.
+  filedAt     DateTime? @map("filed_at") @db.Timestamptz(3)
+  filedNumber String?   @map("filed_number")
+
+  // Ganchos DIAN, hoy vacios.
+  dianCufe   String? @map("dian_cufe")
+  dianStatus String? @map("dian_status")
+
+  notes       String?
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person    Person        @relation(fields: [personId], references: [id])
+  site      Site          @relation(fields: [siteId], references: [id])
+  payer     Payer?        @relation(fields: [payerId], references: [id])
+  createdBy User?         @relation("FacturaCreada", fields: [createdById], references: [id])
+  items     InvoiceItem[]
+  payments  Payment[]
+  glosas    Glosa[]
+
+  @@index([status, dueDate])
+  @@index([personId])
+  @@index([payerId, status])
+  @@index([siteId, issuedAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id            String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  invoiceId     String  @map("invoice_id") @db.Uuid
+  serviceId     String  @map("service_id") @db.Uuid
+  /// De donde salio el cobro. Nulo si se factura algo sin cita.
+  appointmentId String? @map("appointment_id") @db.Uuid
+
+  /// Se copia del servicio al facturar, no se lee por relacion: el CUPS de
+  /// hoy no puede cambiar el de una factura emitida el ano pasado.
+  cupsCode    String? @map("cups_code")
+  description String
+
+  quantity  Int     @default(1)
+  unitPrice Decimal @map("unit_price") @db.Decimal(14, 2)
+  discount  Decimal @default(0) @db.Decimal(14, 2)
+  total     Decimal @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  service     Service      @relation(fields: [serviceId], references: [id])
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+/// Un pago recibido. NUNCA se borra ni se edita: si estuvo mal, se registra
+/// otro en negativo con su motivo. Un pago que se puede editar es un pago que
+/// no prueba nada.
+model Payment {
+  id        String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  invoiceId String        @map("invoice_id") @db.Uuid
+  amount    Decimal       @db.Decimal(14, 2)
+  method    PaymentMethod
+  /// Numero de aprobacion, comprobante o referencia de la transferencia.
+  reference String?
+  notes     String?
+
+  receivedAt   DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+  receivedById String?  @map("received_by_id") @db.Uuid
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id])
+  receivedBy User?   @relation("PagoRecibido", fields: [receivedById], references: [id])
+
+  @@index([invoiceId])
+  @@index([receivedAt])
+  @@map("payments")
+}
+
+/// Objecion del asegurador a un cobro.
+///
+/// Es la mitad del trabajo real de cartera en Colombia y no cabe en un campo
+/// de la factura: una factura puede tener varias glosas, cada una con su
+/// codigo, su valor y su propio desenlace.
+model Glosa {
+  id        String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  invoiceId String      @map("invoice_id") @db.Uuid
+  status    GlosaStatus @default(RECIBIDA)
+
+  /// Codigo de glosa segun la Res. 3047 / 2284.
+  code   String
+  reason String
+  amount Decimal @db.Decimal(14, 2)
+
+  receivedAt     DateTime  @default(now()) @map("received_at") @db.Timestamptz(3)
+  answeredAt     DateTime? @map("answered_at") @db.Timestamptz(3)
+  answer         String?
+  /// Cuanto se acepto perder. La diferencia con `amount` es lo recuperado.
+  acceptedAmount Decimal?  @map("accepted_amount") @db.Decimal(14, 2)
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation("GlosaCreada", fields: [createdById], references: [id])
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("glosas")
 }

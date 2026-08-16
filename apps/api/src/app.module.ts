@@ -18,6 +18,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { PatientsModule } from './modules/patients/patients.module';
 import { TimelineModule } from './modules/timeline/timeline.module';
 import { RemindersModule } from './modules/reminders/reminders.module';
+import { UsersModule } from './modules/users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -45,6 +46,7 @@ import { PrismaModule } from './prisma/prisma.module';
     RemindersModule,
     DashboardModule,
     AiModule,
+    UsersModule,
   ],
   controllers: [HealthController],
   providers: [

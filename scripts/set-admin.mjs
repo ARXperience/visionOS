@@ -52,7 +52,14 @@ let usuario;
 if (existente) {
   usuario = await prisma.user.update({
     where: { id: existente.id },
-    data: { passwordHash, status: 'ACTIVE', role: 'SUPERADMIN', crossSitePatientRead: true },
+    data: {
+      passwordHash,
+      // Invalida los access token ya emitidos, no solo los refresh.
+      passwordChangedAt: new Date(),
+      status: 'ACTIVE',
+      role: 'SUPERADMIN',
+      crossSitePatientRead: true,
+    },
     select: { id: true, email: true },
   });
   console.log(`Contraseña actualizada: ${usuario.email}`);

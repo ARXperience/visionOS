@@ -473,6 +473,15 @@ model User {
 
   lastLoginAt DateTime? @map("last_login_at") @db.Timestamptz(3)
   lastLoginIp String?   @map("last_login_ip")
+
+  /// Cuando se cambio la contrasena por ultima vez.
+  ///
+  /// Revocar los refresh tokens no basta: el access token ya emitido sigue
+  /// siendo valido hasta 15 minutos. Si la clave se cambia porque se filtro,
+  /// esos 15 minutos son justo los que no se pueden regalar. La estrategia
+  /// JWT compara el `iat` del token contra esta marca y rechaza los
+  /// anteriores.
+  passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(3)
   mfaEnabled  Boolean   @default(false) @map("mfa_enabled")
   mfaSecret   String?   @map("mfa_secret")
 

@@ -305,8 +305,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Usuarios y permisos',
     grupo: 'Sistema',
     icono: 'llave',
-    estado: 'construccion',
-    resumen: 'Nueve roles con permisos por acción, y acceso por sede. El servidor ya los aplica; falta la pantalla.',
+    estado: 'disponible',
+    resumen:
+      'Crear cuentas, cambiar contraseñas, asignar rol y sedes, suspender y dar de baja. Nueve roles con permisos por acción.',
     entrega: 'E1',
     permiso: 'user.read',
   },

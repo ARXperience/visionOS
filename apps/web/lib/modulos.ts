@@ -255,8 +255,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Profesionales y horarios',
     grupo: 'Recursos',
     icono: 'bata',
-    estado: 'construccion',
-    resumen: 'Quién atiende qué, en qué sede y en qué franja. Es lo que la agenda necesita para existir.',
+    estado: 'disponible',
+    resumen:
+      'Quién atiende qué, en qué sede y en qué franja, más ausencias y bloqueos de agenda. Sin esto la agenda no ofrece ningún cupo.',
     entrega: 'E1',
     permiso: 'schedule.manage',
   },

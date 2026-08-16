@@ -261,14 +261,7 @@ export default function Usuarios() {
   );
 }
 
-/** DELETE no cabe en el ayudante `api`; se hace directo. */
-async function baja(id: string) {
-  const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? '/api'}/usuarios/${id}`, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-  if (!r.ok) throw new Error(((await r.json()) as { message?: string }).message ?? 'Error');
-}
+const baja = (id: string) => api.del(`/usuarios/${id}`);
 
 function Crear({
   roles,

@@ -1223,3 +1223,122 @@ code {
   font-size: 0.72rem;
   font-family: ui-monospace, monospace;
 }
+
+/* ── profesionales ──────────────────────────────────── */
+.prof {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 20px;
+  margin-top: 12px;
+}
+.prof.inactivo {
+  opacity: 0.62;
+  border-style: dashed;
+}
+.prof header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.prof header b {
+  display: block;
+  font-size: 0.98rem;
+}
+.prof header .tenue {
+  font-size: 0.79rem;
+}
+.punto-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex: none;
+}
+.prof-resumen {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 0.83rem;
+}
+.prof-resumen .pill {
+  font-size: 0.68rem;
+  margin-right: 4px;
+}
+.prof-config {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 26px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.servicios-check details {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 7px;
+}
+.servicios-check summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.servicios-check label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.85rem;
+  margin: 7px 0 0 4px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  color: var(--fg);
+}
+.servicios-check input {
+  width: auto;
+  margin: 3px 0 0;
+}
+
+.franjas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+.franjas li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  font-size: 0.86rem;
+  background: #fbfdff;
+}
+.franjas b {
+  min-width: 84px;
+}
+.quitar {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  color: var(--mute);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.quitar:hover {
+  color: var(--danger);
+}
+
+@media (max-width: 1100px) {
+  .prof-config {
+    grid-template-columns: 1fr;
+  }
+}

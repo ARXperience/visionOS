@@ -102,4 +102,10 @@ export const api = {
   get: <T>(ruta: string) => pedir<T>(ruta),
   post: <T>(ruta: string, cuerpo?: unknown) =>
     pedir<T>(ruta, { method: 'POST', body: cuerpo ? JSON.stringify(cuerpo) : undefined }),
+  patch: <T>(ruta: string, cuerpo: unknown) =>
+    pedir<T>(ruta, { method: 'PATCH', body: JSON.stringify(cuerpo) }),
+  // DELETE pasa por el mismo `pedir` a propósito: un fetch suelto no lleva
+  // la cabecera Authorization —la cookie es solo del refresh— y devolvería
+  // 401 sin que se entienda por qué.
+  del: <T>(ruta: string) => pedir<T>(ruta, { method: 'DELETE' }),
 };

@@ -20,6 +20,7 @@ const CONSULTORIOS = [
   { code: 'DEMO-C1', name: 'Consultorio 1', kind: 'CONSULTORIO' as const },
   { code: 'DEMO-C2', name: 'Consultorio 2', kind: 'CONSULTORIO' as const },
   { code: 'DEMO-D1', name: 'Sala de diagnóstico', kind: 'SALA_DIAGNOSTICO' as const },
+  { code: 'DEMO-Q1', name: 'Quirófano 1', kind: 'QUIROFANO' as const },
 ];
 
 export async function sembrarDemo(prisma: PrismaClient): Promise<void> {

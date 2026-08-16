@@ -122,10 +122,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Cirugías',
     grupo: 'Pacientes',
     icono: 'diana',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Candidato → valoración → exámenes → autorización → prequirúrgicos → cirugía → control. El quirófano ya es un recurso de la agenda.',
-    entrega: null,
+      'Lista de verificación de la OMS en sus tres fases y confirmación del ojo antes de la incisión. El quirófano es un recurso más de la agenda.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
   {
     id: 'pqrsf',

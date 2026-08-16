@@ -162,3 +162,30 @@ que definir la variable de repositorio `PUBLIC_API_URL`.
 Supabase hace copias automáticas según el plan. **Programar además una
 restauración de prueba mensual**: el backup que nunca se restauró no es un
 backup, y aquí hay datos de salud sujetos a la Ley 1581.
+
+## Migraciones: NUNCA uses la base real como base sombra
+
+`prisma migrate diff --shadow-database-url` **borra y recrea** la base que le
+pases. Apuntarla a `DIRECT_DATABASE_URL` destruye los datos. Ya pasó una vez,
+el 16 de agosto de 2026, y se llevó los datos de prueba de la base de
+desarrollo.
+
+El flujo correcto, ahora que la base está baselineada:
+
+```bash
+# 1. Editar schema.prisma
+# 2. Generar el SQL SIN tocar ninguna base:
+npx prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script > prisma/migrations/AAAAMMDDHHMMSS_nombre/migration.sql
+
+# 3. LEER el SQL. El diff no conoce lo creado en SQL crudo (indices de
+#    trigramas, EXCLUDE, triggers append-only) y propone borrarlo.
+# 4. Aplicar:
+npx prisma migrate deploy
+```
+
+`prisma migrate dev` contra Supabase pide reset por una deriva falsa —
+detecta las extensiones que instala el propio Supabase (`pgcrypto`,
+`supabase_vault`, `pg_stat_statements`). No es deriva real. No lo uses.

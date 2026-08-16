@@ -152,6 +152,9 @@ enum PatientEventType {
   NO_ASISTIO
   ORDEN_GENERADA
   RESULTADO_CARGADO
+  CIRUGIA_PROGRAMADA
+  CIRUGIA_REALIZADA
+  CIRUGIA_SUSPENDIDA
   CONSENTIMIENTO_OTORGADO
   CONSENTIMIENTO_REVOCADO
   NOTA_MANUAL
@@ -378,6 +381,7 @@ model Site {
   pqrsf          Pqrsf[]
   leads          Lead[]
   waitlist       WaitlistEntry[]
+  surgeries      Surgery[]
 
   @@map("sites")
 }
@@ -539,6 +543,8 @@ model User {
   statusEvents        AppointmentStatusEvent[]
   bookings            ResourceBooking[]
 
+  surgeriesCreated Surgery[] @relation("CirugiaCreada")
+
   @@index([role, status])
   @@map("users")
 }
@@ -687,6 +693,8 @@ model Person {
   serviceOrders   ServiceOrder[]
   pqrsf           Pqrsf[]
 
+  surgeries Surgery[]
+
   @@unique([docType, docNumber])
   @@index([displayName])
   @@index([phone])
@@ -803,6 +811,9 @@ model Professional {
   orderedOrders  ServiceOrder[]             @relation("OrdenadaPor")
   results        ServiceResult[]            @relation("RealizadoPor")
   bookings       ResourceBooking[]
+
+  surgeriesAsSurgeon          Surgery[] @relation("Cirujano")
+  surgeriesAsAnesthesiologist Surgery[] @relation("Anestesiologo")
 
   @@unique([docType, docNumber])
   @@index([isActive, type])
@@ -1107,6 +1118,8 @@ model Appointment {
   waitlistFills WaitlistEntry[]           @relation("CupoOcupado")
   ordersCreated ServiceOrder[]            @relation("OrigenDeOrden")
   results       ServiceResult[]
+
+  surgery Surgery?
 
   @@index([siteId, startsAt])
   @@index([siteId, status, startsAt])
@@ -1545,4 +1558,127 @@ model Pqrsf {
   @@index([estado, dueDate])
   @@index([personId])
   @@map("pqrsf")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CIRUGIA
+// ═══════════════════════════════════════════════════════════════════
+
+enum SurgeryStatus {
+  PROGRAMADA
+  EN_PREPARACION
+  EN_QUIROFANO
+  OPERADA
+  SUSPENDIDA
+}
+
+enum AnesthesiaType {
+  TOPICA
+  LOCAL
+  PERIBULBAR
+  SEDACION
+  GENERAL
+}
+
+/// Programacion quirurgica.
+///
+/// Cuelga de una Appointment y no se reinventa la agenda: el quirofano, el
+/// cirujano y el equipo se reservan con las mismas ResourceBooking, asi que la
+/// misma restriccion EXCLUDE de PostgreSQL que impide dos citas solapadas
+/// impide dos cirugias en el mismo quirofano. Cero codigo extra.
+///
+/// Lo que si es propio de aqui es lo que no se puede hacer mal: el
+/// consentimiento, la lista de verificacion de la OMS y la LATERALIDAD.
+/// Operar el ojo equivocado es el evento adverso centinela de la
+/// oftalmologia, y es 100% prevenible con una pausa quirurgica que alguien
+/// tenga que firmar.
+model Surgery {
+  id            String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  /// Una cita, una cirugia.
+  appointmentId String @unique @map("appointment_id") @db.Uuid
+  personId      String @map("person_id") @db.Uuid
+  siteId        String @map("site_id") @db.Uuid
+
+  status SurgeryStatus @default(PROGRAMADA)
+
+  /// NUNCA puede ser AO ni NA. Se valida en el servicio y se vuelve a
+  /// confirmar en voz alta durante la pausa quirurgica.
+  laterality Laterality
+
+  surgeonId          String  @map("surgeon_id") @db.Uuid
+  anesthesiologistId String? @map("anesthesiologist_id") @db.Uuid
+  /// Instrumentador, circulante, ayudantes: nombres, no usuarios del sistema.
+  teamNotes          String? @map("team_notes")
+
+  anesthesia AnesthesiaType @default(TOPICA)
+
+  /// Consentimiento informado QUIRURGICO, distinto del de datos personales.
+  /// Sin el firmado no se entra a quirofano.
+  consentSignedAt DateTime? @map("consent_signed_at") @db.Timestamptz(3)
+  consentFileUrl  String?   @map("consent_file_url")
+
+  // ── Lista de verificacion de la OMS, sus tres fases ────────────────
+  // Cada fase guarda QUIEN la cerro y CUANDO, no solo que se hizo: una
+  // lista sin responsable no es una lista, es un adorno.
+  entryAt   DateTime? @map("entry_at") @db.Timestamptz(3)
+  entryById String?   @map("entry_by_id") @db.Uuid
+  entryData Json?     @map("entry_data")
+  pauseAt   DateTime? @map("pause_at") @db.Timestamptz(3)
+  pauseById String?   @map("pause_by_id") @db.Uuid
+  pauseData Json?     @map("pause_data")
+  exitAt    DateTime? @map("exit_at") @db.Timestamptz(3)
+  exitById  String?   @map("exit_by_id") @db.Uuid
+  exitData  Json?     @map("exit_data")
+
+  startedAt     DateTime? @map("started_at") @db.Timestamptz(3)
+  endedAt       DateTime? @map("ended_at") @db.Timestamptz(3)
+  findings      String?
+  complications String?
+  suspendReason String?   @map("suspend_reason")
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  appointment      Appointment      @relation(fields: [appointmentId], references: [id])
+  person           Person           @relation(fields: [personId], references: [id])
+  site             Site             @relation(fields: [siteId], references: [id])
+  surgeon          Professional     @relation("Cirujano", fields: [surgeonId], references: [id])
+  anesthesiologist Professional?    @relation("Anestesiologo", fields: [anesthesiologistId], references: [id])
+  createdBy        User?            @relation("CirugiaCreada", fields: [createdById], references: [id])
+  implants         SurgeryImplant[]
+
+  @@index([siteId, status])
+  @@index([personId])
+  @@map("surgeries")
+}
+
+/// Lente intraocular u otro implante, con su lote y su serie.
+///
+/// Es una tabla y no un campo en Surgery por una sola pregunta, la que se
+/// hace el dia de un retiro del mercado: "que pacientes tienen un lente de
+/// este lote". Con los datos metidos en un texto libre esa consulta no se
+/// puede responder, y hay que llamar a todos.
+model SurgeryImplant {
+  id        String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  surgeryId String @map("surgery_id") @db.Uuid
+
+  kind   String
+  brand  String?
+  model  String?
+  /// Poder dioptrico del lente. Decimal porque los pasos son de 0.5 D.
+  power  Decimal? @db.Decimal(6, 2)
+  lot    String?
+  serial String?
+  /// Registro sanitario INVIMA.
+  invima String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  surgery Surgery @relation(fields: [surgeryId], references: [id], onDelete: Cascade)
+
+  @@index([surgeryId])
+  @@index([lot])
+  @@index([serial])
+  @@map("surgery_implants")
 }

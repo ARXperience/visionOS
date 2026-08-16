@@ -23,6 +23,7 @@ import { ProfessionalsModule } from './modules/professionals/professionals.modul
 import { UsersModule } from './modules/users/users.module';
 import { PqrsfModule } from './modules/pqrsf/pqrsf.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { SurgeriesModule } from './modules/surgeries/surgeries.module';
 import { PrismaModule } from './prisma/prisma.module';
 
 /**
@@ -55,6 +56,7 @@ import { PrismaModule } from './prisma/prisma.module';
     OrdersModule,
     PqrsfModule,
     StorageModule,
+    SurgeriesModule,
   ],
   controllers: [HealthController],
   providers: [

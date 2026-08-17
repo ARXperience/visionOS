@@ -8,6 +8,10 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
+import { AutomationsModule } from './modules/automations/automations.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { IndicatorsModule } from './modules/indicators/indicators.module';
+import { StaffModule } from './modules/staff/staff.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { OpticsModule } from './modules/optics/optics.module';
@@ -44,6 +48,10 @@ import { PrismaModule } from './prisma/prisma.module';
     ScheduleModule.forRoot(),
     PrismaModule,
     AuditModule,
+    AutomationsModule,
+    DocumentsModule,
+    IndicatorsModule,
+    StaffModule,
     BillingModule,
     InventoryModule,
     OpticsModule,

@@ -244,10 +244,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Indicadores',
     grupo: 'Dinero',
     icono: 'grafico',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Ocupación, no-show, conversión, ticket promedio y rentabilidad. Se resolverá con Metabase sobre la misma base, no con código propio.',
-    entrega: null,
+      'Oportunidad, no-show, espera en sala, recaudo y cumplimiento de PQRSF, mes a mes. Para cruzar datos a mano va Metabase sobre la misma base.',
+    entrega: 'E9',
+    permiso: 'dashboard.read',
   },
 
   // ── Recursos ──────────────────────────────────────────────────────
@@ -277,28 +278,33 @@ export const MODULOS: Modulo[] = [
     nombre: 'Talento humano',
     grupo: 'Recursos',
     icono: 'equipo',
-    estado: 'planeado',
-    resumen: 'Contratos, turnos, permisos, incapacidades y vencimientos documentales.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Credenciales del personal y sus vencimientos: quién está atendiendo con la póliza vencida. Nómina y turnos no se construyen.',
+    entrega: 'E9',
+    permiso: 'user.read',
   },
   {
     id: 'documentos',
     nombre: 'Documentos',
     grupo: 'Recursos',
     icono: 'carpeta',
-    estado: 'planeado',
-    resumen: 'Órdenes, autorizaciones y resultados, clasificados y con permisos por documento.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Cédulas, autorizaciones y órdenes en papel, con hash del archivo y auditoría de cada apertura. Se archivan, no se borran.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
   {
     id: 'automatizaciones',
     nombre: 'Automatizaciones',
     grupo: 'Recursos',
     icono: 'engranaje',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Cuando ocurra X, ejecutar Y. Las reglas vivirán en código hasta que existan diez reales; un motor configurable antes de eso es una trampa.',
-    entrega: null,
+      'Las cuatro reglas que corren solas, con cómo comprobar que de verdad funcionan. No hay motor configurable: las reglas viven en código hasta que existan diez reales.',
+    entrega: 'E9',
+    permiso: 'dashboard.read',
   },
 
   // ── Sistema ───────────────────────────────────────────────────────

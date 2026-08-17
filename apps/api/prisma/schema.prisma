@@ -561,6 +561,9 @@ model User {
   stockMovements       StockMovement[] @relation("MovimientoStock")
   opticalOrdersCreated OpticalOrder[]  @relation("OrdenOpticaCreada")
 
+  credentialsUploaded StaffCredential[] @relation("CredencialCargada")
+  documentsUploaded   PersonDocument[]  @relation("DocumentoCargado")
+
   @@index([role, status])
   @@map("users")
 }
@@ -716,6 +719,8 @@ model Person {
   prescriptions Prescription[]
   opticalOrders OpticalOrder[]
 
+  documents PersonDocument[]
+
   @@unique([docType, docNumber])
   @@index([displayName])
   @@index([phone])
@@ -837,6 +842,8 @@ model Professional {
   surgeriesAsSurgeon          Surgery[]      @relation("Cirujano")
   surgeriesAsAnesthesiologist Surgery[]      @relation("Anestesiologo")
   prescriptions               Prescription[]
+
+  credentials StaffCredential[]
 
   @@unique([docType, docNumber])
   @@index([isActive, type])
@@ -2121,4 +2128,104 @@ model OpticalOrder {
   @@index([personId])
   @@index([siteId, status])
   @@map("optical_orders")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TALENTO HUMANO Y DOCUMENTOS
+// ═══════════════════════════════════════════════════════════════════
+
+enum CredentialKind {
+  TARJETA_PROFESIONAL
+  RETHUS
+  ESPECIALIZACION
+  POLIZA_RESPONSABILIDAD
+  CARNET_VACUNACION
+  CURSO_SOPORTE_VITAL
+  EXAMEN_OCUPACIONAL
+  CONTRATO
+  OTRO
+}
+
+/// Documento habilitante de un profesional, con su vencimiento.
+///
+/// Es el unico pedazo de talento humano que se construye, y por una razon
+/// concreta: un profesional atendiendo con la tarjeta profesional vencida o
+/// sin poliza de responsabilidad es un problema legal de la IPS, no suyo, y
+/// nadie se entera hasta que hay una demanda o una visita de habilitacion.
+///
+/// Nomina, contratacion y evaluacion de desempeno NO se construyen: se
+/// compran (Siigo, Alegra). Vacaciones y ausencias tampoco: ya son bloqueos
+/// de ResourceBooking, que es lo que de verdad importa —que no se le pueda
+/// agendar un paciente a alguien que no esta.
+model StaffCredential {
+  id             String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  professionalId String         @map("professional_id") @db.Uuid
+  kind           CredentialKind
+
+  number    String?
+  issuedBy  String?   @map("issued_by")
+  issuedAt  DateTime? @map("issued_at") @db.Date
+  /// Nulo = no vence. La poliza siempre vence; la tarjeta profesional no.
+  expiresAt DateTime? @map("expires_at") @db.Date
+
+  /// Clave del archivo en el almacenamiento. Nunca una URL publica.
+  fileUrl String? @map("file_url")
+  notes   String?
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  professional Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation("CredencialCargada", fields: [createdById], references: [id])
+
+  @@index([professionalId])
+  @@index([expiresAt])
+  @@map("staff_credentials")
+}
+
+enum PersonDocumentKind {
+  DOCUMENTO_IDENTIDAD
+  AUTORIZACION
+  ORDEN_MEDICA
+  CONSENTIMIENTO
+  HISTORIA_EXTERNA
+  SOPORTE_PAGO
+  OTRO
+}
+
+/// Archivo asociado a un paciente que no cuelga de otra cosa.
+///
+/// Los resultados de examen viven en ServiceResult y los consentimientos
+/// quirurgicos en Surgery: aquellos tienen reglas propias. Esto es para lo
+/// demas —la copia de la cedula, la autorizacion de la EPS, la orden que trajo
+/// el paciente en papel— que hoy vive en una carpeta compartida sin auditoria.
+model PersonDocument {
+  id       String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId String             @map("person_id") @db.Uuid
+  kind     PersonDocumentKind
+  title    String
+
+  fileUrl   String @map("file_url")
+  fileName  String @map("file_name")
+  mimeType  String @map("mime_type")
+  sizeBytes Int    @map("size_bytes")
+  /// Hash del contenido: es lo que permite demostrar que el archivo no cambio.
+  sha256    String @db.VarChar(64)
+
+  /// Una autorizacion de la EPS vence. Una cedula no.
+  expiresAt DateTime? @map("expires_at") @db.Date
+
+  /// Baja logica. Los documentos clinicos no se borran (Res. 1995): se marcan.
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  archivedReason String?   @map("archived_reason")
+
+  uploadedById String?  @map("uploaded_by_id") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  person     Person @relation(fields: [personId], references: [id])
+  uploadedBy User?  @relation("DocumentoCargado", fields: [uploadedById], references: [id])
+
+  @@index([personId, kind])
+  @@map("person_documents")
 }

@@ -77,9 +77,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Seguimiento y recordatorios',
     grupo: 'Operación',
     icono: 'campana',
-    estado: 'construccion',
+    estado: 'disponible',
     resumen:
-      'El motor ya corre: programa recordatorios a 24 y 2 horas, interpreta la respuesta del paciente y marca no-show solo. Lo que falta es la pantalla para verlo y ajustarlo.',
+      'Lista de espera en orden de llamada y pacientes que no volvieron. Los recordatorios corren solos; su salud se ve en Automatizaciones.',
     entrega: 'E6',
     permiso: 'appointment.read',
   },
@@ -180,8 +180,9 @@ export const MODULOS: Modulo[] = [
     nombre: 'Leads y comercial',
     grupo: 'Comercial',
     icono: 'embudo',
-    estado: 'planeado',
-    resumen: 'De dónde vino, qué le interesa, qué se le cotizó y si volvió. Conectado al paciente, no separado.',
+    estado: 'disponible',
+    resumen:
+      'De dónde vino, qué le interesa y por qué se perdió. La conversión se deriva de que tenga cita, no se marca a mano.',
     entrega: 'E4',
     permiso: 'lead.read',
   },

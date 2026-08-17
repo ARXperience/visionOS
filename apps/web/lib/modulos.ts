@@ -199,9 +199,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Óptica y punto de venta',
     grupo: 'Comercial',
     icono: 'gafas',
-    estado: 'planeado',
-    resumen: 'Fórmulas, monturas, lentes, órdenes a laboratorio, entrega y garantías, dentro del mismo Paciente 360°.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Fórmula, orden a laboratorio, entrega y garantía. La entrega descarga el inventario; la fórmula no se puede editar.',
+    entrega: 'E9',
+    permiso: 'patient.read',
   },
 
   // ── Dinero ────────────────────────────────────────────────────────
@@ -231,9 +233,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Inventario y compras',
     grupo: 'Dinero',
     icono: 'caja',
-    estado: 'planeado',
-    resumen: 'Insumos, material quirúrgico y lentes por sede, con lotes, vencimientos y mínimos.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Existencias por sede y lote con libro de movimientos que no se puede editar, avisos de mínimos y de vencimientos.',
+    entrega: 'E9',
+    permiso: 'service.read',
   },
   {
     id: 'indicadores',

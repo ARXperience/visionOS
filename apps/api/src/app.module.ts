@@ -9,6 +9,8 @@ import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { OpticsModule } from './modules/optics/optics.module';
 import { AiModule } from './modules/ai/ai.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -43,6 +45,8 @@ import { PrismaModule } from './prisma/prisma.module';
     PrismaModule,
     AuditModule,
     BillingModule,
+    InventoryModule,
+    OpticsModule,
     TimelineModule,
     AuthModule,
     CatalogModule,

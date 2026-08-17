@@ -152,6 +152,8 @@ enum PatientEventType {
   NO_ASISTIO
   ORDEN_GENERADA
   RESULTADO_CARGADO
+  FORMULA_OPTICA
+  GAFAS_ENTREGADAS
   CIRUGIA_PROGRAMADA
   CIRUGIA_REALIZADA
   CIRUGIA_SUSPENDIDA
@@ -384,6 +386,10 @@ model Site {
   surgeries      Surgery[]
   invoices       Invoice[]
 
+  stockLevels    StockLevel[]
+  stockMovements StockMovement[]
+  opticalOrders  OpticalOrder[]
+
   @@map("sites")
 }
 
@@ -552,6 +558,9 @@ model User {
   paymentsReceived Payment[] @relation("PagoRecibido")
   glosasCreated    Glosa[]   @relation("GlosaCreada")
 
+  stockMovements       StockMovement[] @relation("MovimientoStock")
+  opticalOrdersCreated OpticalOrder[]  @relation("OrdenOpticaCreada")
+
   @@index([role, status])
   @@map("users")
 }
@@ -704,6 +713,9 @@ model Person {
 
   invoices Invoice[]
 
+  prescriptions Prescription[]
+  opticalOrders OpticalOrder[]
+
   @@unique([docType, docNumber])
   @@index([displayName])
   @@index([phone])
@@ -822,8 +834,9 @@ model Professional {
   results        ServiceResult[]            @relation("RealizadoPor")
   bookings       ResourceBooking[]
 
-  surgeriesAsSurgeon          Surgery[] @relation("Cirujano")
-  surgeriesAsAnesthesiologist Surgery[] @relation("Anestesiologo")
+  surgeriesAsSurgeon          Surgery[]      @relation("Cirujano")
+  surgeriesAsAnesthesiologist Surgery[]      @relation("Anestesiologo")
+  prescriptions               Prescription[]
 
   @@unique([docType, docNumber])
   @@index([isActive, type])
@@ -1129,8 +1142,9 @@ model Appointment {
   ordersCreated ServiceOrder[]            @relation("OrigenDeOrden")
   results       ServiceResult[]
 
-  surgery      Surgery?
-  invoiceItems InvoiceItem[]
+  surgery       Surgery?
+  invoiceItems  InvoiceItem[]
+  prescriptions Prescription[]
 
   @@index([siteId, startsAt])
   @@index([siteId, status, startsAt])
@@ -1870,4 +1884,241 @@ model Glosa {
   @@index([invoiceId])
   @@index([status])
   @@map("glosas")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INVENTARIO
+// ═══════════════════════════════════════════════════════════════════
+
+enum ProductKind {
+  INSUMO
+  MEDICAMENTO
+  MATERIAL_QUIRURGICO
+  LENTE_INTRAOCULAR
+  MONTURA
+  LENTE_OFTALMICO
+  LENTE_CONTACTO
+  OTRO
+}
+
+enum StockMoveKind {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  TRASLADO_SALIDA
+  TRASLADO_ENTRADA
+  BAJA
+}
+
+/// Lo que la clinica guarda, gasta o vende.
+model Product {
+  id    String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sku   String      @unique
+  name  String
+  kind  ProductKind
+  brand String?
+  model String?
+  unit  String      @default("unidad")
+
+  /// Registro sanitario. Vender un dispositivo medico sin el es una sancion.
+  invima   String?
+  /// Si es false, no se puede vender ni consumir, solo ajustar a cero.
+  isActive Boolean @default(true) @map("is_active")
+
+  /// Exige lote y vencimiento en cada entrada. Un medicamento sin lote no se
+  /// puede retirar del mercado ni rastrear cuando algo sale mal.
+  tracksLot Boolean @default(false) @map("tracks_lot")
+
+  /// Bajo este numero hay que reponer. Por producto; el minimo por sede va en
+  /// StockLevel, porque Ibague no gasta lo mismo que Bogota.
+  minQty Int @default(0) @map("min_qty")
+
+  salePrice Decimal? @map("sale_price") @db.Decimal(14, 2)
+  costPrice Decimal? @map("cost_price") @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  levels             StockLevel[]
+  movements          StockMovement[]
+  opticalOrdersFrame OpticalOrder[]  @relation("Montura")
+  opticalOrdersLens  OpticalOrder[]  @relation("LenteOftalmico")
+
+  @@index([kind, isActive])
+  @@map("products")
+}
+
+/// Existencia de un producto en una sede y, si aplica, en un lote.
+///
+/// Es un saldo cacheado, no la verdad: la verdad son los movimientos. Se
+/// actualiza en la MISMA transaccion que el movimiento para que no puedan
+/// discrepar, y se puede reconstruir sumando el libro.
+model StockLevel {
+  id        String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  productId String @map("product_id") @db.Uuid
+  siteId    String @map("site_id") @db.Uuid
+
+  /// Cadena vacia, no null: un indice unico con null deja meter la misma
+  /// combinacion dos veces, porque en SQL null nunca es igual a null.
+  lot       String    @default("")
+  expiresAt DateTime? @map("expires_at") @db.Date
+
+  quantity Int  @default(0)
+  /// Minimo especifico de esta sede. Nulo = se usa el del producto.
+  minQty   Int? @map("min_qty")
+
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  site    Site    @relation(fields: [siteId], references: [id])
+
+  @@unique([productId, siteId, lot])
+  @@index([siteId, quantity])
+  @@index([expiresAt])
+  @@map("stock_levels")
+}
+
+/// El libro. Append-only por trigger: un movimiento borrado es un faltante
+/// que nadie puede explicar.
+model StockMovement {
+  id        String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  productId String        @map("product_id") @db.Uuid
+  siteId    String        @map("site_id") @db.Uuid
+  kind      StockMoveKind
+
+  lot       String    @default("")
+  expiresAt DateTime? @map("expires_at") @db.Date
+
+  /// Siempre positiva. El signo lo pone `kind`, no el numero: un menos
+  /// perdido en un formulario convierte una salida en una entrada.
+  quantity Int
+  /// Saldo despues del movimiento. Congelado, para poder auditar sin
+  /// recalcular todo el libro.
+  balance  Int
+
+  reason   String?
+  /// De donde salio: cirugia, orden de optica, factura.
+  refType  String?  @map("ref_type")
+  refId    String?  @map("ref_id") @db.Uuid
+  unitCost Decimal? @map("unit_cost") @db.Decimal(14, 2)
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  product   Product @relation(fields: [productId], references: [id])
+  site      Site    @relation(fields: [siteId], references: [id])
+  createdBy User?   @relation("MovimientoStock", fields: [createdById], references: [id])
+
+  @@index([productId, siteId, createdAt])
+  @@index([refType, refId])
+  @@map("stock_movements")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OPTICA
+// ═══════════════════════════════════════════════════════════════════
+
+enum OpticalOrderStatus {
+  TOMADA
+  EN_LABORATORIO
+  RECIBIDA
+  ENTREGADA
+  ANULADA
+}
+
+/// Formula optica. Es un dato clinico: la firma un profesional y no se edita.
+///
+/// Los valores se guardan como Decimal y no como texto porque hay que poder
+/// compararlos: "el eje cambio 15 grados" solo es una pregunta contestable si
+/// el eje es un numero.
+model Prescription {
+  id             String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  personId       String  @map("person_id") @db.Uuid
+  professionalId String  @map("professional_id") @db.Uuid
+  appointmentId  String? @map("appointment_id") @db.Uuid
+
+  issuedAt DateTime  @default(now()) @map("issued_at") @db.Timestamptz(3)
+  /// Vigencia. Una formula vieja montada en un lente nuevo es un lente que el
+  /// paciente devuelve.
+  validTo  DateTime? @map("valid_to") @db.Date
+
+  // Ojo derecho
+  odSphere   Decimal? @map("od_sphere") @db.Decimal(5, 2)
+  odCylinder Decimal? @map("od_cylinder") @db.Decimal(5, 2)
+  odAxis     Int?     @map("od_axis")
+  odAdd      Decimal? @map("od_add") @db.Decimal(5, 2)
+  odPrism    String?  @map("od_prism")
+
+  // Ojo izquierdo
+  oiSphere   Decimal? @map("oi_sphere") @db.Decimal(5, 2)
+  oiCylinder Decimal? @map("oi_cylinder") @db.Decimal(5, 2)
+  oiAxis     Int?     @map("oi_axis")
+  oiAdd      Decimal? @map("oi_add") @db.Decimal(5, 2)
+  oiPrism    String?  @map("oi_prism")
+
+  /// Distancia interpupilar en milimetros.
+  pupillaryDistance Decimal? @map("pupillary_distance") @db.Decimal(5, 1)
+  lensType          String?  @map("lens_type")
+  notes             String?
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  person       Person         @relation(fields: [personId], references: [id])
+  professional Professional   @relation(fields: [professionalId], references: [id])
+  appointment  Appointment?   @relation(fields: [appointmentId], references: [id])
+  orders       OpticalOrder[]
+
+  @@index([personId, issuedAt])
+  @@map("prescriptions")
+}
+
+/// Orden de optica: la montura, los lentes, el laboratorio y la entrega.
+model OpticalOrder {
+  id     String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  number String             @unique
+  status OpticalOrderStatus @default(TOMADA)
+
+  personId       String @map("person_id") @db.Uuid
+  siteId         String @map("site_id") @db.Uuid
+  prescriptionId String @map("prescription_id") @db.Uuid
+
+  frameProductId String? @map("frame_product_id") @db.Uuid
+  /// Montura del paciente: no sale del inventario pero hay que registrarla.
+  frameOwn       Boolean @default(false) @map("frame_own")
+  frameNote      String? @map("frame_note")
+  lensProductId  String? @map("lens_product_id") @db.Uuid
+  lensNote       String? @map("lens_note")
+
+  lab         String?
+  /// Lo que se le prometio al paciente. Sin esto no hay forma de saber si el
+  /// laboratorio esta incumpliendo.
+  promisedAt  DateTime? @map("promised_at") @db.Date
+  sentAt      DateTime? @map("sent_at") @db.Timestamptz(3)
+  receivedAt  DateTime? @map("received_at") @db.Timestamptz(3)
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(3)
+  /// Quien recibio las gafas. Puede no ser el paciente.
+  deliveredTo String?   @map("delivered_to")
+
+  /// Meses de garantia desde la entrega.
+  warrantyMonths Int @default(3) @map("warranty_months")
+
+  price     Decimal? @db.Decimal(14, 2)
+  invoiceId String?  @map("invoice_id") @db.Uuid
+
+  voidReason  String?  @map("void_reason")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  person       Person       @relation(fields: [personId], references: [id])
+  site         Site         @relation(fields: [siteId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+  frameProduct Product?     @relation("Montura", fields: [frameProductId], references: [id])
+  lensProduct  Product?     @relation("LenteOftalmico", fields: [lensProductId], references: [id])
+  createdBy    User?        @relation("OrdenOpticaCreada", fields: [createdById], references: [id])
+
+  @@index([status, promisedAt])
+  @@index([personId])
+  @@index([siteId, status])
+  @@map("optical_orders")
 }

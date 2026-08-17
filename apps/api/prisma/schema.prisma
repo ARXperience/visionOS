@@ -390,6 +390,9 @@ model Site {
   stockMovements StockMovement[]
   opticalOrders  OpticalOrder[]
 
+  cashCloses CashClose[]
+  campaigns  Campaign[]
+
   @@map("sites")
 }
 
@@ -564,6 +567,9 @@ model User {
   credentialsUploaded StaffCredential[] @relation("CredencialCargada")
   documentsUploaded   PersonDocument[]  @relation("DocumentoCargado")
 
+  cashClosesDone   CashClose[] @relation("CajaCerrada")
+  campaignsCreated Campaign[]  @relation("CampanaCreada")
+
   @@index([role, status])
   @@map("users")
 }
@@ -720,6 +726,8 @@ model Person {
   opticalOrders OpticalOrder[]
 
   documents PersonDocument[]
+
+  campaignParticipations CampaignParticipant[]
 
   @@unique([docType, docNumber])
   @@index([displayName])
@@ -2228,4 +2236,134 @@ model PersonDocument {
 
   @@index([personId, kind])
   @@map("person_documents")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TESORERIA Y CAMPANAS
+// ═══════════════════════════════════════════════════════════════════
+
+/// Cierre de caja de una sede en un dia.
+///
+/// El sistema sabe cuanto DEBERIA haber: es la suma de los pagos en efectivo
+/// del dia. Lo que no sabe es cuanto HAY, y esa diferencia es el unico dato
+/// que importa. Una caja que siempre cuadra al peso no se esta contando.
+///
+/// Se guarda el esperado congelado y no se recalcula al abrirlo despues: si
+/// se recalculara, un pago registrado tarde borraria el descuadre que hubo
+/// ese dia, que es justo lo que hay que poder revisar.
+model CashClose {
+  id     String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  siteId String   @map("site_id") @db.Uuid
+  /// Un cierre por sede y por dia.
+  date   DateTime @db.Date
+
+  /// Efectivo que el sistema calculo al cerrar.
+  expectedCash Decimal @map("expected_cash") @db.Decimal(14, 2)
+  /// Efectivo que se conto fisicamente.
+  countedCash  Decimal @map("counted_cash") @db.Decimal(14, 2)
+  /// contado - esperado. Positivo sobra, negativo falta.
+  difference   Decimal @db.Decimal(14, 2)
+
+  /// Los otros medios se registran para conciliar contra el datafono y el
+  /// extracto, pero no se cuentan a mano.
+  expectedCard     Decimal @map("expected_card") @db.Decimal(14, 2)
+  expectedTransfer Decimal @map("expected_transfer") @db.Decimal(14, 2)
+  expectedOther    Decimal @map("expected_other") @db.Decimal(14, 2)
+
+  /// Base con la que arranco la caja al dia siguiente.
+  openingFloat Decimal @default(0) @map("opening_float") @db.Decimal(14, 2)
+
+  notes      String?
+  closedById String?  @map("closed_by_id") @db.Uuid
+  closedAt   DateTime @default(now()) @map("closed_at") @db.Timestamptz(3)
+
+  site     Site  @relation(fields: [siteId], references: [id])
+  closedBy User? @relation("CajaCerrada", fields: [closedById], references: [id])
+
+  @@unique([siteId, date])
+  @@index([date])
+  @@map("cash_closes")
+}
+
+/// Empresa cliente para jornadas de tamizaje.
+model Company {
+  id           String  @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  nit          String  @unique
+  name         String
+  contactName  String? @map("contact_name")
+  contactPhone String? @map("contact_phone")
+  contactEmail String? @map("contact_email")
+  address      String?
+  notes        String?
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  campaigns Campaign[]
+
+  @@map("companies")
+}
+
+enum CampaignStatus {
+  PLANEADA
+  CONFIRMADA
+  EJECUTADA
+  CANCELADA
+}
+
+/// Jornada de tamizaje en una empresa.
+///
+/// No se modela como un monton de citas: una jornada es un evento con su
+/// propio compromiso —"vamos el martes con dos optometras y esperamos 60
+/// personas"— y lo que se mide es cuantos aparecieron de los que dijeron.
+/// Cada asistente atendido SI genera su Person, porque un hallazgo en un
+/// tamizaje es un paciente que hay que poder llamar.
+model Campaign {
+  id        String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  companyId String         @map("company_id") @db.Uuid
+  siteId    String?        @map("site_id") @db.Uuid
+  status    CampaignStatus @default(PLANEADA)
+
+  name           String
+  scheduledAt    DateTime @map("scheduled_at") @db.Timestamptz(3)
+  location       String?
+  /// Cuantos dijo la empresa que irian. El denominador de la jornada.
+  expectedPeople Int?     @map("expected_people")
+  notes          String?
+
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  company      Company               @relation(fields: [companyId], references: [id])
+  site         Site?                 @relation(fields: [siteId], references: [id])
+  createdBy    User?                 @relation("CampanaCreada", fields: [createdById], references: [id])
+  participants CampaignParticipant[]
+
+  @@index([status, scheduledAt])
+  @@map("campaigns")
+}
+
+/// Persona atendida en una jornada.
+model CampaignParticipant {
+  id         String @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  campaignId String @map("campaign_id") @db.Uuid
+  personId   String @map("person_id") @db.Uuid
+
+  /// Hallazgo del tamizaje, en una linea. No es historia clinica: es el
+  /// motivo por el que hay que llamar a esta persona.
+  finding       String?
+  /// Si requiere valoracion en consultorio. Es el unico resultado que
+  /// convierte una jornada en pacientes.
+  needsFollowUp Boolean @default(false) @map("needs_follow_up")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  person   Person   @relation(fields: [personId], references: [id])
+
+  @@unique([campaignId, personId])
+  @@index([needsFollowUp])
+  @@map("campaign_participants")
 }

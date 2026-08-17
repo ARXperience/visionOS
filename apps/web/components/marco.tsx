@@ -26,12 +26,25 @@ export function Marco({ children }: { children: ReactNode }) {
   const [comprobando, setComprobando] = useState(true);
   const ruta = usePathname();
 
+  /**
+   * El portal del paciente vive FUERA de la sesión: es una página pública a
+   * la que se llega desde el recordatorio de WhatsApp. Pedirle una contraseña
+   * a un paciente para ver la hora de su cita es justo lo que se decidió no
+   * construir.
+   */
+  const esPublica = (ruta ?? '').replace(/^\/admin/, '').startsWith('/mi-cita');
+
   useEffect(() => {
+    if (esPublica) {
+      setComprobando(false);
+      return;
+    }
     recuperar()
       .then(setSesion)
       .finally(() => setComprobando(false));
-  }, []);
+  }, [esPublica]);
 
+  if (esPublica) return <>{children}</>;
   if (comprobando) return <main className="acceso" aria-busy="true" />;
   if (!sesion) return <Acceso alEntrar={setSesion} />;
 

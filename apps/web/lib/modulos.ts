@@ -191,9 +191,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Campañas empresariales',
     grupo: 'Comercial',
     icono: 'edificio',
-    estado: 'planeado',
-    resumen: 'Jornadas de tamizaje en empresas: contactos, fechas, asistentes e informes de salud ocupacional.',
-    entrega: null,
+    estado: 'disponible',
+    resumen:
+      'Jornadas de tamizaje: asistencia real contra la prometida y, sobre todo, a quién hay que llamar por un hallazgo.',
+    entrega: 'E9',
+    permiso: 'lead.read',
   },
   {
     id: 'optica',
@@ -224,10 +226,11 @@ export const MODULOS: Modulo[] = [
     nombre: 'Tesorería',
     grupo: 'Dinero',
     icono: 'moneda',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Recaudo diario por sede, cierre de caja y conciliación bancaria. La cartera por edades y las glosas ya están en Facturación.',
-    entrega: null,
+      'Cierre de caja diario por sede: lo que el sistema espera contra lo que se contó. La diferencia es el único dato que importa.',
+    entrega: 'E9',
+    permiso: 'dashboard.read',
   },
   {
     id: 'inventario',
@@ -342,14 +345,14 @@ export const MODULOS: Modulo[] = [
     permiso: 'audit.read',
   },
   {
-    id: 'portal',
+    id: 'mi-cita',
     nombre: 'Portal del paciente',
     grupo: 'Sistema',
     icono: 'mundo',
-    estado: 'planeado',
+    estado: 'disponible',
     resumen:
-      'Segunda etapa, y con dudas: WhatsApp ya es la aplicación que el paciente tiene instalada y sabe usar.',
-    entrega: null,
+      'Página pública SIN contraseña: código de la cita + últimos 4 del documento. Consultar, confirmar y cancelar. Reagendar sigue siendo por WhatsApp.',
+    entrega: 'E9',
   },
 ];
 

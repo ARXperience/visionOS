@@ -10,9 +10,12 @@ import { HealthController } from './health/health.controller';
 import { AuditModule } from './modules/audit/audit.module';
 import { AutomationsModule } from './modules/automations/automations.module';
 import { DocumentsModule } from './modules/documents/documents.module';
+import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { FollowupModule } from './modules/followup/followup.module';
 import { IndicatorsModule } from './modules/indicators/indicators.module';
 import { LeadsModule } from './modules/leads/leads.module';
+import { PortalModule } from './modules/portal/portal.module';
+import { TreasuryModule } from './modules/treasury/treasury.module';
 import { StaffModule } from './modules/staff/staff.module';
 import { BillingModule } from './modules/billing/billing.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
@@ -52,9 +55,12 @@ import { PrismaModule } from './prisma/prisma.module';
     AuditModule,
     AutomationsModule,
     DocumentsModule,
+    CampaignsModule,
     FollowupModule,
     IndicatorsModule,
     LeadsModule,
+    PortalModule,
+    TreasuryModule,
     StaffModule,
     BillingModule,
     InventoryModule,

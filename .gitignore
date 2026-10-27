@@ -1,6 +1,6 @@
 node_modules/
 dist/
-.next/
+.next*/
 out/
 .turbo/
 coverage/
@@ -22,3 +22,5 @@ auth_info*/
 *.log
 .DS_Store
 Thumbs.db
+.aidesigner/*
+!.aidesigner/.gitkeep

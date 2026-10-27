@@ -92,8 +92,13 @@ CORS_ORIGINS=https://visioncolombia.com.co
 COOKIE_DOMAIN=.visioncolombia.com.co
 WHATSAPP_AUTH_ENCRYPTION_KEY=…   # openssl rand -hex 32
 GATEWAY_URL=https://wa.visioncolombia.com.co
+PORTAL_URL=https://visioncolombia.com.co/mi-cita.html
 GIT_SHA=                      # lo pone el build
 ```
+
+`PORTAL_URL` es opcional: si está vacía, el recordatorio de WhatsApp no lleva
+enlace y el paciente solo puede responder 1 o 2. Ponerla antes de anunciar el
+portal, no después.
 
 **`WHATSAPP_AUTH_ENCRYPTION_KEY` no se puede perder ni cambiar**: cifra las
 credenciales de sesión de WhatsApp. Si se pierde, hay que escanear el QR de
@@ -114,11 +119,22 @@ Variable de entorno:
 NEXT_PUBLIC_API_URL=https://api.visioncolombia.com.co/api
 ```
 
-El panel queda en `/admin` (es el `basePath` de Next). El sitio público de la
-clínica sigue siendo el HTML estático que genera `tools/build.py` en el otro
-repositorio; para servirlo en la raíz del mismo dominio, un `rewrite` en el
-proyecto de Vercel o un proyecto aparte con el dominio y `/admin` reescrito
-hacia este.
+El panel queda en `/admin` (es el `basePath` de Next).
+
+**El sitio público ya vive en este repositorio**, en `vision web/`: HTML, CSS
+y JS estáticos, sin build. Hay que servirlo en la RAÍZ del mismo dominio,
+porque de ahí cuelgan dos cosas que no son cosméticas:
+
+- `/mi-cita.html` es el portal del paciente, y es a donde apunta el enlace
+  del recordatorio de WhatsApp (`PORTAL_URL`).
+- El formulario de citas llama a `https://api.visioncolombia.com.co/api`, que
+  tiene que estar en `CORS_ORIGINS` junto con el dominio del sitio.
+
+En Vercel se hace con un proyecto aparte que sirva esa carpeta y reescriba
+`/admin` y `/api` hacia los otros dos, o con un `rewrite` en este mismo
+proyecto. En un servidor propio con Caddy es el mismo reparto que hace
+`scripts/dev-proxy.mjs` en local: `/api` a la API, `/admin` a Next, y todo lo
+demás a los archivos del sitio.
 
 ## 4. El gateway de WhatsApp — lo que falta
 

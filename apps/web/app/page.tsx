@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Icono } from '../components/icono';
 import { useSesion } from '../components/marco';
 import { api } from '../lib/api';
-import { ETIQUETA_ESTADO, GRUPOS, MODULOS } from '../lib/modulos';
+import { ETIQUETA_ESTADO, GRUPOS, MODULOS, type Modulo } from '../lib/modulos';
 
 interface Tablero {
   citas: {
@@ -105,37 +105,69 @@ export default function CentroDeControl() {
         </p>
       )}
 
-      <h2 style={{ marginTop: 44 }}>El ecosistema</h2>
-      <p className="sub">
-        {MODULOS.length} módulos sobre una sola base de pacientes, sedes, servicios, agenda,
-        conversaciones y eventos. Lo que no está construido lo dice.
-      </p>
-
-      {GRUPOS.map((grupo) => (
-        <section key={grupo} style={{ marginTop: 30 }}>
-          <h3 className="grupo-titulo">{grupo}</h3>
-          <div className="rejilla">
-            {MODULOS.filter((m) => m.grupo === grupo).map((m) => (
-              <Link
-                key={m.id || 'inicio'}
-                href={m.id ? `/${m.id}` : '/'}
-                className={`ficha e-${m.estado}`}
-              >
-                <span className="ficha-cab">
-                  <Icono nombre={m.icono} tam={20} />
-                  <b>{m.nombre}</b>
-                </span>
-                <p>{m.resumen}</p>
-                <span className="ficha-pie">
-                  <em className={`estado ${m.estado}`}>{ETIQUETA_ESTADO[m.estado]}</em>
-                  {m.entrega ? <i>{m.entrega}</i> : <i className="fuera">fuera de fase 1</i>}
-                </span>
-              </Link>
-            ))}
+      <section className="ecosistema" aria-labelledby="ecosistema-titulo">
+        <div className="ecosistema-cabecera">
+          <div>
+            <span className="sobrelinea">Mapa operativo</span>
+            <h2 id="ecosistema-titulo">El ecosistema</h2>
           </div>
-        </section>
-      ))}
+          <span className="contador-modulos">{MODULOS.length} módulos conectados</span>
+        </div>
+        <p className="sub">
+          Cada módulo comparte la misma fuente de verdad: pacientes, sedes, agenda,
+          conversaciones y eventos. El estado de cada capacidad se muestra de forma explícita.
+        </p>
+        <div className="ecosistema-grupos">
+          {GRUPOS.map((grupo) => (
+            <section key={grupo}>
+              <h3 className="grupo-titulo">{grupo}</h3>
+              <div className="rejilla">
+                {MODULOS.filter((m) => m.grupo === grupo).map((m, indice) => (
+                  <TarjetaModulo key={m.id || 'inicio'} modulo={m} indice={indice + 1} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
     </>
+  );
+}
+
+function TarjetaModulo({ modulo, indice }: { modulo: Modulo; indice: number }) {
+  const destino = modulo.id ? `/${modulo.id}` : '/';
+  const disponible = modulo.estado === 'disponible';
+
+  return (
+    <Link href={destino} className={`ficha modulo-card e-${modulo.estado}`}>
+      <span className="modulo-luz" aria-hidden="true" />
+      <span className="modulo-cabecera">
+        <span className="modulo-icono" aria-hidden="true">
+          <Icono nombre={modulo.icono} tam={21} />
+        </span>
+        <span className="modulo-contexto">
+          <span>{modulo.grupo}</span>
+          <strong>{String(indice).padStart(2, '0')}</strong>
+        </span>
+      </span>
+
+      <span className="modulo-titulo">
+        <b>{modulo.nombre}</b>
+        <span className="modulo-flecha" aria-hidden="true">↗</span>
+      </span>
+      <p>{modulo.resumen}</p>
+
+      <span className="ficha-pie modulo-pie">
+        <em className={`estado ${modulo.estado}`}>
+          <span className="estado-punto" aria-hidden="true" />
+          {ETIQUETA_ESTADO[modulo.estado]}
+        </em>
+        <span className="modulo-meta">
+          {modulo.entrega ? `Entrega ${modulo.entrega}` : 'Visión futura'}
+        </span>
+        <span className="modulo-accion">{disponible ? 'Abrir' : 'Explorar'}</span>
+      </span>
+    </Link>
   );
 }
 

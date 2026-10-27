@@ -62,7 +62,12 @@ jobs:
           node -e "
             const p = require('/tmp/deploy/package.json');
             p.scripts = {
-              start: 'npx prisma migrate deploy && node dist/main',
+              // dist/src/main y no dist/main: el tsconfig compila también
+              // prisma/**/*.ts, así que la salida conserva las dos carpetas
+              // y el entry queda un nivel más adentro. Con la ruta corta el
+              // proceso muere al arrancar con MODULE_NOT_FOUND y el panel de
+              // Hostinger solo dice 'la aplicación se detuvo'.
+              start: 'npx prisma migrate deploy && node dist/src/main',
               postinstall: 'npx prisma generate',
             };
             delete p.devDependencies;

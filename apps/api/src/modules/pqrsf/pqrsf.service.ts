@@ -5,7 +5,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
 interface Ctx {
-  actor: User;
+  /** null cuando radica el propio ciudadano desde el sitio público. */
+  actor: User | null;
   ip?: string | null;
 }
 
@@ -109,13 +110,13 @@ export class PqrsfService {
         siteId: datos.siteId,
         serviceId: datos.serviceId,
         dueDate,
-        createdById: ctx.actor.id,
+        createdById: ctx.actor?.id ?? null,
       },
       select: { id: true, radicado: true, dueDate: true, tipo: true },
     });
 
     await this.audit.record({
-      userId: ctx.actor.id,
+      userId: ctx.actor?.id ?? null,
       action: 'CREATE',
       entityType: 'pqrsf',
       entityId: p.id,
@@ -168,7 +169,7 @@ export class PqrsfService {
     });
 
     await this.audit.record({
-      userId: ctx.actor.id,
+      userId: ctx.actor?.id ?? null,
       action: 'UPDATE',
       entityType: 'pqrsf',
       entityId: id,
@@ -201,7 +202,7 @@ export class PqrsfService {
     });
 
     await this.audit.record({
-      userId: ctx.actor.id,
+      userId: ctx.actor?.id ?? null,
       action: 'UPDATE',
       entityType: 'pqrsf',
       entityId: id,
@@ -227,7 +228,7 @@ export class PqrsfService {
     });
 
     await this.audit.record({
-      userId: ctx.actor.id,
+      userId: ctx.actor?.id ?? null,
       action: 'UPDATE',
       entityType: 'pqrsf',
       entityId: id,

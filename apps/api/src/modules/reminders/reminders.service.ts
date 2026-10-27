@@ -242,5 +242,12 @@ function texto(
   // La respuesta se parsea después: por eso las opciones son 1 y 2 y no
   // texto libre, que habría que interpretar con un modelo.
   partes.push('', `Responda *1* para confirmar o *2* para cancelar. (${cita.publicCode})`);
+
+  // El enlace lleva el código puesto, pero el portal sigue pidiendo los
+  // últimos cuatro del documento: así una URL reenviada por error no le
+  // muestra la cita de nadie a nadie.
+  const portal = process.env.PORTAL_URL;
+  if (portal) partes.push('', `O consúltela aquí: ${portal}?c=${cita.publicCode}`);
+
   return partes.join('\n');
 }

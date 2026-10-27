@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Servicio | Visión Colombia</title><meta name="theme-color" content="#0A2452">
+<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap"><link rel="stylesheet" href="estilo.css?v=20260908-15">
+<script>try{var t=localStorage.getItem('tema');if(t)document.documentElement.dataset.tema=t}catch(e){}</script>
+</head>
+<body>
+<a class="saltar" href="#principal">Saltar al contenido</a>
+<header class="barra"><div class="wrap barra__fila">
+  <a class="marca" href="index.html" aria-label="Visión Colombia, inicio"><svg viewBox="0 0 32 32" width="30" height="30" fill="none" aria-hidden="true"><path d="M2 16s5.6-9.6 14-9.6S30 16 30 16s-5.6 9.6-14 9.6S2 16 2 16Z" stroke="currentColor" stroke-width="2.1"/><circle cx="16" cy="16" r="5.6" fill="#0E93B4"/><circle cx="16" cy="16" r="2.4" fill="#0A2452"/><circle cx="18.1" cy="13.7" r="1.15" fill="#fff"/></svg><span>VISIÓN COLOMBIA<i>Clínica oftalmológica</i></span></a>
+  <ul class="menu" id="menu"><li><a href="index.html">Inicio</a></li><li><a href="servicios.html" aria-current="page">Servicios</a></li><li><a href="sedes.html">Sedes</a></li><li><a href="mi-cita.html">Mi cita</a></li><li><a href="contacto.html">Contacto</a></li></ul>
+  <div class="barra__acciones"><button class="tema" type="button" data-tema-boton aria-label="Cambiar entre tema claro y oscuro"><svg class="sol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l1.4 1.4"/></svg><svg class="luna" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg></button><a class="btn" href="citas.html">Agendar cita</a><button class="hamburguesa" type="button" data-menu-boton aria-expanded="false" aria-controls="menu" aria-label="Abrir el menú"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button></div>
+</div></header>
+<main id="principal">
+  <section class="portada portada--pagina"><img class="portada__imagen" data-hero alt=""><div class="portada__velo"></div><div class="wrap"><p class="etiqueta sube" style="--d:80ms">Servicios · Consultas</p><h1 class="display sube" data-titulo style="--d:180ms">Cargando servicio</h1><p class="entrada sube" data-resumen style="--d:300ms">Estamos preparando la información clínica de este servicio.</p><div class="acciones sube" style="--d:420ms"><a class="btn btn--grande" href="citas.html">Agendar cita</a><a class="btn btn--grande btn--vidrio" href="consultas.html">Ver consultas</a></div></div></section>
+  <section class="seccion"><div class="wrap detalle-servicio__rejilla"><article class="detalle-servicio__lectura revela" data-contenido aria-live="polite"><p class="entrada">Cargando información…</p></article><aside class="detalle-servicio__lateral revela"><p class="etiqueta">Antes de venir</p><h2>Le orientamos</h2><p>Le confirmamos sede, disponibilidad y preparación necesaria para su atención.</p><a class="btn" href="citas.html">Agendar cita</a><a class="flecha" href="https://wa.me/573105149719">Escribir por WhatsApp</a></aside></div></section>
+  <section class="seccion llamada"><div class="wrap centro"><p class="etiqueta revela" style="color:var(--hielo)">Su atención empieza aquí</p><h2 class="titular revela">Cuidar su visión<br>empieza con una conversación</h2><div class="acciones revela"><a class="btn btn--claro btn--grande" href="citas.html">Agendar cita</a><a class="btn btn--vidrio btn--grande" href="consultas.html">Volver a consultas</a></div></div></section>
+</main>
+<footer class="pie"><div class="wrap"><div class="pie__rejilla"><div><h3>Visión Colombia</h3><p>Calidad tecnológica,<br>científica y humana.</p></div><div><h3>Servicios</h3><ul><li><a href="consultas.html">Consultas</a></li><li><a href="examenes-diagnosticos.html">Exámenes</a></li><li><a href="cirugias.html">Cirugías</a></li></ul></div><div><h3>Contacto</h3><ul><li><a href="tel:+576017455472">Bogotá (601) 745 5472</a></li><li><a href="https://wa.me/573105149719">WhatsApp 310 514 9719</a></li></ul></div></div><p class="pie__legal">© <span data-anio>2026</span> Clínica Oftalmológica Visión Colombia S.A.S.</p></div></footer>
+<script>
+(() => {
+  const archivo = new URLSearchParams(location.search).get('servicio') || '';
+  const permitido = /^[a-z0-9-]+\.html$/i.test(archivo);
+  const familias = {
+    diagnostico: new Set(['angiografia-fluoresceinica.html','biometria-optica.html','campo-visual-computarizado.html','citologia-de-impresion.html','ecografia-ocular-ultrasonica.html','electrooculograma.html','electroretinograma.html','interferometria.html','paquimetria-ultrasonica.html','potenciales-visuales-evocados.html','pupilometria.html','recuento-endotelial.html','test-de-estereopsis-test-de-titmus.html','test-de-farnsworth-d15.html','tomografia-optica-coherente.html','topografia-corneal-y-paquimetria-pentacam.html','ultrabiomicroscopia-ultrasonica-ubm.html']),
+    cirugia: new Set(['blefaroplastia.html','cirugia-refractiva-personalizada.html','estrabismo.html','extraccion-de-cataratas.html','implante-de-anillos-intraestromales.html','pterigion.html','queratoplastia-o-trasplante-corneal.html','reticulacion-corneal-o-crosslinking.html']),
+    optica: new Set(['consulta-especializada-de-lentes-de-contacto.html'])
+  };
+  const imagen = familias.diagnostico.has(archivo) ? 'media/servicios/diagnostico-nueva.png' : familias.cirugia.has(archivo) ? 'media/servicios/cirugias-nueva.png' : familias.optica.has(archivo) ? 'media/servicios/optica-nueva.png' : 'media/servicios/consultas-nueva.png';
+  const hero = document.querySelector('[data-hero]');
+  hero.src = imagen;
+  const contenido = document.querySelector('[data-contenido]');
+  const escribir = (tag, texto, destino = contenido) => { const el = document.createElement(tag); el.textContent = texto; destino.append(el); };
+  if (!permitido) { escribir('h2', 'Servicio no disponible'); escribir('p', 'Vuelva al catálogo de consultas para elegir una atención.'); return; }
+  fetch(archivo).then(r => { if (!r.ok) throw new Error(); return r.text(); }).then(texto => {
+    const fuente = new DOMParser().parseFromString(texto, 'text/html');
+    const titulo = fuente.querySelector('.phero h1')?.textContent.trim() || 'Consulta oftalmológica';
+    const resumen = fuente.querySelector('.phero .lead')?.textContent.trim() || 'Información clínica del servicio.';
+    document.title = `${titulo} | Visión Colombia`;
+    document.querySelector('[data-titulo]').textContent = titulo;
+    document.querySelector('[data-resumen]').textContent = resumen;
+    hero.alt = titulo;
+    contenido.innerHTML = '';
+    const fuenteLectura = fuente.querySelector('.prose');
+    if (!fuenteLectura) { escribir('p', resumen); return; }
+    let lista = null;
+    fuenteLectura.querySelectorAll(':scope > p, :scope > ul > li').forEach(nodo => {
+      const textoNodo = nodo.textContent.replace(/\s+/g, ' ').trim();
+      if (!textoNodo) return;
+      if (nodo.tagName === 'LI') {
+        if (!lista) { lista = document.createElement('ul'); contenido.append(lista); }
+        escribir('li', textoNodo, lista);
+      } else {
+        lista = null;
+        escribir('p', textoNodo);
+      }
+    });
+  }).catch(() => { contenido.innerHTML = ''; escribir('h2', 'No pudimos cargar este servicio'); escribir('p', 'Vuelva a Consultas o escríbanos para recibir orientación.'); });
+})();
+</script>
+<script src="sitio.js?v=20260908-08" defer></script>
+</body></html>

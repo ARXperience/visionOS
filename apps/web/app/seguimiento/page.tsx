@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
+import { Icono } from '../../components/icono';
 import { api } from '../../lib/api';
 
 interface Espera {
@@ -84,16 +85,30 @@ export default function Seguimiento() {
       {error && <p className="error" role="alert">{error}</p>}
 
       {resumen && (
-        <div className="tarjetas" style={{ marginTop: 14 }}>
-          <div className="tarjeta"><strong style={{ fontSize: '1.6rem' }}>{resumen.enEspera}</strong><span className="tenue">En lista de espera</span></div>
-          <div className="tarjeta"><strong style={{ fontSize: '1.6rem' }}>{resumen.ofrecidosSinRespuesta}</strong><span className="tenue">Cupo ofrecido sin respuesta</span></div>
-          <div
-            className="tarjeta"
-            style={resumen.controlesPendientes > 0 ? { borderColor: '#B4261A' } : undefined}
-          >
-            <strong style={{ fontSize: '1.6rem' }}>{resumen.controlesPendientes}</strong>
-            <span className="tenue">No volvieron</span>
-          </div>
+        <div className="seguimiento-resumen" aria-label="Resumen de seguimiento">
+          <IndicadorSeguimiento
+            icono="calendario"
+            valor={resumen.enEspera}
+            etiqueta="En lista de espera"
+            detalle="Pacientes esperando un cupo disponible"
+            contexto="Ordenados por prioridad y antigüedad"
+          />
+          <IndicadorSeguimiento
+            icono="chat"
+            valor={resumen.ofrecidosSinRespuesta}
+            etiqueta="Cupo ofrecido"
+            detalle="Aún sin confirmación del paciente"
+            contexto="Requieren una llamada o mensaje"
+            tono="atencion"
+          />
+          <IndicadorSeguimiento
+            icono="campana"
+            valor={resumen.controlesPendientes}
+            etiqueta="No volvieron"
+            detalle="Sin una cita futura programada"
+            contexto="Oportunidad de recuperar el control"
+            tono={resumen.controlesPendientes > 0 ? 'prioridad' : 'neutro'}
+          />
         </div>
       )}
 
@@ -193,5 +208,38 @@ export default function Seguimiento() {
         </>
       )}
     </>
+  );
+}
+
+function IndicadorSeguimiento({
+  icono,
+  valor,
+  etiqueta,
+  detalle,
+  contexto,
+  tono = 'neutro',
+}: {
+  icono: string;
+  valor: number;
+  etiqueta: string;
+  detalle: string;
+  contexto: string;
+  tono?: 'neutro' | 'atencion' | 'prioridad';
+}) {
+  return (
+    <article className={`indicador-seguimiento ${tono}`}>
+      <div className="indicador-cabecera">
+        <span className="indicador-icono" aria-hidden="true"><Icono nombre={icono} tam={20} /></span>
+        <span className="indicador-estado">
+          <span aria-hidden="true" /> En seguimiento
+        </span>
+      </div>
+      <div className="indicador-valor">
+        <strong>{valor}</strong>
+        <span>{etiqueta}</span>
+      </div>
+      <p>{detalle}</p>
+      <footer>{contexto}<span aria-hidden="true">↗</span></footer>
+    </article>
   );
 }

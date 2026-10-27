@@ -344,16 +344,6 @@ export const MODULOS: Modulo[] = [
     entrega: 'E1',
     permiso: 'audit.read',
   },
-  {
-    id: 'mi-cita',
-    nombre: 'Portal del paciente',
-    grupo: 'Sistema',
-    icono: 'mundo',
-    estado: 'disponible',
-    resumen:
-      'Página pública SIN contraseña: código de la cita + últimos 4 del documento. Consultar, confirmar y cancelar. Reagendar sigue siendo por WhatsApp.',
-    entrega: 'E9',
-  },
 ];
 
 export const GRUPOS = [

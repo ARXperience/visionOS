@@ -1,6 +1,6 @@
 # Estado de VISION OS
 
-Última actualización: 14 de agosto de 2026.
+Última actualización: 4 de septiembre de 2026.
 
 ## Qué está construido
 
@@ -15,6 +15,7 @@
 | **E6** | Recordatorios, confirmación, no-show | Hecho · sin pantalla |
 | **E7** | Tablero del día | Hecho y verificado |
 | **E8** | Corte a producción | **Pendiente — es de la clínica** |
+| **E9** | Sitio público conectado: citas, catálogo, portal y PQRSF | Hecho · **sin desplegar en la raíz del dominio** |
 
 **66 pruebas** (54 API + 12 gateway), **14 migraciones** aplicadas contra Neon.
 

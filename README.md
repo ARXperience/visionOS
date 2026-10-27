@@ -28,12 +28,37 @@ node scripts/dev-proxy.mjs   # todo junto en :8777, como en producción
 
 - Sitio público: <http://localhost:8777/>
 - VISION OS: <http://localhost:8777/admin>
+- Portal del paciente: <http://localhost:8777/mi-cita.html>
 - Salud: <http://localhost:8777/api/health>
+
+El proxy sirve `vision web/` de este mismo repositorio. Con `SITIO_DIR` se
+puede apuntar a otra carpeta.
 
 Las extensiones (`btree_gist`, `pg_trgm`, `unaccent`, `uuid-ossp`) las crea la
 migración inicial, así que el rol debe poder ejecutar `CREATE EXTENSION`.
 
 ---
+
+## El sitio público no es un folleto
+
+Está enchufado al sistema. Todo lo que el paciente escribe entra donde el
+equipo trabaja, no a una bandeja de correo que alguien revisa cuando puede.
+
+| En la web | En VISION OS |
+|---|---|
+| Formulario de citas | `Person` + `Lead` con `source: WEB` y su consentimiento Ley 1581 |
+| Desplegables de sede y servicio | El catálogo real: `GET /api/publico/sedes` y `/servicios` |
+| `mi-cita.html` | `POST /api/portal/consultar` y `/responder` — confirma y cancela de verdad |
+| Formulario de PQRSF | `Pqrsf` radicada, con su plazo legal en días hábiles |
+
+Las rutas nuevas viven en `apps/api/src/modules/publico/` y son las únicas
+—con `/portal`— marcadas `@Public()`. Tienen su propio límite por IP: seis
+solicitudes por hora, no las 120 por minuto del resto.
+
+Un teléfono escrito en la web se normaliza igual que el que llega por
+WhatsApp (`aE164Colombia`). Es lo que evita que la misma persona entre dos
+veces al sistema: quien escribió por WhatsApp y luego llenó el formulario es
+uno, no dos.
 
 ## Reglas que no se negocian
 
@@ -93,7 +118,8 @@ Ese valor debe ser el commit que se acaba de subir.
 
 ```
 apps/api/     NestJS 10 + Prisma 6 + PostgreSQL 16
-apps/web/     Next.js + React 19
+apps/web/     Next.js + React 19  (el panel, bajo /admin)
+vision web/   sitio público de la clínica: HTML, CSS y JS sin build
 ```
 
 `apps/whatsapp-gateway/` entra en E2 como proceso separado: reiniciar el API no

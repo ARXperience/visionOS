@@ -34,6 +34,7 @@ import { RemindersModule } from './modules/reminders/reminders.module';
 import { ProfessionalsModule } from './modules/professionals/professionals.module';
 import { UsersModule } from './modules/users/users.module';
 import { PqrsfModule } from './modules/pqrsf/pqrsf.module';
+import { PublicoModule } from './modules/publico/publico.module';
 import { StorageModule } from './modules/storage/storage.module';
 import { SurgeriesModule } from './modules/surgeries/surgeries.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -60,6 +61,7 @@ import { PrismaModule } from './prisma/prisma.module';
     IndicatorsModule,
     LeadsModule,
     PortalModule,
+    PublicoModule,
     TreasuryModule,
     StaffModule,
     BillingModule,

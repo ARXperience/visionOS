@@ -1142,6 +1142,15 @@ a.tarjeta {
   min-height: 0;
   aspect-ratio: 16 / 6;
 }
+/* Videos e infografías se ven enteros: recortarlos corta el texto que llevan. */
+.visual video {
+  width: 100%;
+  height: auto;
+}
+.visual--plano img {
+  height: auto;
+  min-height: 0;
+}
 
 .mosaico-visual {
   display: grid;

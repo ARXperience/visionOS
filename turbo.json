@@ -11,7 +11,8 @@
     },
     "lint": {},
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["DATABASE_URL", "DIRECT_DATABASE_URL", "S3_*"]
     }
   }
 }

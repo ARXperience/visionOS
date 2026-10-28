@@ -630,7 +630,7 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id])
   /// La persona nunca se borra fisicamente —el trigger de consentimientos lo
   /// impide—, asi que la clave foranea no puede dejar huerfano un registro.
-  person Person? @relation("AuditoriaSobre", fields: [personId], references: [id])
+  person Person? @relation("AuditoriaSobre", fields: [personId], references: [id], onDelete: Restrict)
 
   @@index([personId, createdAt(sort: Desc)])
   @@index([userId, createdAt(sort: Desc)])
@@ -734,6 +734,11 @@ model Person {
   @@index([phone])
   @@index([isPatient, createdAt])
   @@index([mergedIntoId])
+  // Nació en SQL crudo (core_vision_constraints); declarado, `migrate diff`
+  // deja de proponer borrarlo. Su vecino persons_doc_idx NO se puede
+  // declarar: es btree con varchar_pattern_ops, Prisma no lee esa clase de
+  // operador y propondría recrearlo en cada migración.
+  @@index([displayName(ops: raw("gin_trgm_ops"))], map: "persons_name_trgm", type: Gin)
   @@map("persons")
 }
 

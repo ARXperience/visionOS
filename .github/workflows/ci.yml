@@ -44,6 +44,10 @@ jobs:
       # positivos en cambios que no son de modelo (anadir directUrl al
       # datasource, por ejemplo) y una regla que grita en falso se termina
       # ignorando.
+      #
+      # La unica excepcion es persons_doc_idx: btree con varchar_pattern_ops,
+      # que Prisma no sabe declarar y siempre propone borrar. Es la misma que
+      # filtra scripts/migracion.mjs; cualquier otra diferencia falla.
       - name: Migraciones al dia con el esquema
         run: |
           cd apps/api
@@ -51,9 +55,27 @@ jobs:
             --from-migrations prisma/migrations \
             --to-schema-datamodel prisma/schema.prisma \
             --shadow-database-url "$SHADOW_DATABASE_URL" \
-            --exit-code && echo "sin deriva"
+            --script > deriva.sql
+          if grep -vE '^\s*$|^--|DROP INDEX "persons_doc_idx"' deriva.sql; then
+            echo "::error::schema.prisma y las migraciones no describen lo mismo"
+            exit 1
+          fi
+          echo "sin deriva"
         env:
           SHADOW_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/shadow
+
+      # Sin base, las pruebas de integracion se saltan solas y el CI sale
+      # verde sin haber tocado PostgreSQL. Algunas necesitan profesionales y
+      # salas: por eso SEED_DEMO.
+      - name: Base de pruebas
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "create database visionos"
+          npm run prisma:generate --workspace apps/api
+          npm run migrate:deploy --workspace apps/api
+          SEED_DEMO=1 npm run seed --workspace apps/api
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visionos
+          DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visionos
 
       - run: npm run build
 
@@ -65,4 +87,12 @@ jobs:
             exit 1
           fi
 
+      # S3 falso a proposito: firmar una URL de subida no sale a la red, y
+      # sin credenciales las pruebas del filtro de archivos se saltan.
       - run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visionos
+          DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/visionos
+          S3_ENDPOINT: http://localhost:9000
+          S3_ACCESS_KEY_ID: prueba
+          S3_SECRET_ACCESS_KEY: prueba
